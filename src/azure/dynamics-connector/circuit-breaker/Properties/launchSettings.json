@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "circuit-breaker": {
+      "commandName": "Project",
+      "commandLineArgs": "host start --port 7074"
+    }
+  }
+}

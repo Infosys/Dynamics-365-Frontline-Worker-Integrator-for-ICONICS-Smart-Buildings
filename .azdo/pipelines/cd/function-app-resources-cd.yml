@@ -1,0 +1,28 @@
+# Variables to be configured during pipeline creation/execution
+# groupId
+# environment
+# location
+# resourceGroupName
+# azureServiceConnectionName
+
+trigger:
+ branches:
+   include:
+     - main
+ paths:
+   include:
+     - /deployment/azure/function-apps/*
+
+stages:
+- stage: Deployment
+  jobs:
+  - job: AzureResourceDeployment
+    pool: 
+      vmImage: 'ubuntu-18.04'
+    steps:
+    - template: ../../pipelines/templates/deploy-azure.yml
+      parameters: 
+        name: DeployFunctionAppSettings
+        deploymentMode: Incremental
+        ARMTemplateFile: $(Build.Repository.LocalPath)/deployment/azure/function-apps/azure-deploy.json
+        ARMParametersFile: $(Build.Repository.LocalPath)/deployment/azure/function-apps/azure-deploy-parameters-$(environment).json

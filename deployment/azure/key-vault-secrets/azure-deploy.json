@@ -1,0 +1,124 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "groupId": {
+            "type": "string",
+            "metadata": {
+                "description": "The group name to use for creating resource names"
+            }
+        },
+        "environment": {
+            "type": "string",
+            "defaultValue": "d",
+            "metadata": {
+                "description": "The alphabetical character that identifies the deployment environment to use in the name for each created resource. For example, values include 'd' for development, 't' for test, 's' for staging, and 'p' for production."
+            }
+        },
+        "includeDynamicsSecrets": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Indicates whether the Dynamics secrets should be added as part of the deployment"
+            } 
+        },
+        "dynamicsClientId": {
+            "type": "securestring",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The value of the Dynamics Client ID to store in the vault."
+            }
+        },
+        "dynamicsClientSecret": {
+            "type": "securestring",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The value of the Dynamics Client Secret to store in the vault."
+            }
+        },
+        "iotHubIncludedInPipeline": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "Indicates whether the IoTHub was created by the pipeline and therefore does not need to have a secret added."
+            } 
+        },
+        "iotHubServiceSecretName": {
+            "type": "string",
+            "defaultValue": "IoTServiceKey-faults",
+            "metadata": {
+                "description": "The name of the IoTHub Secret to store in the vault."
+            }
+        },
+        "iotHubServiceSecret": {
+            "type": "securestring",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The value of the IoTHub Secret to store in the vault."
+            }
+        },
+        "iotHubDeviceSecretName": {
+            "type": "string",
+            "defaultValue": "IoTDeviceKey-faults",
+            "metadata": {
+                "description": "The name of the IoTHub Device Secret to store in the vault."
+            }
+        },
+        "iotHubDeviceSecret": {
+            "type": "securestring",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The value of the IoTHub Device Secret to store in the vault."
+            }
+        }
+    },
+    "variables": {
+        "location": "[resourceGroup().location]",
+        "baseName": "[toLower(concat(parameters('groupId'), parameters('environment'), variables('location')))]",
+        "keyVaultName": "[concat(variables('baseName'), 'kvt')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "condition": "[parameters('includeDynamicsSecrets')]",
+            "name": "[concat(variables('keyVaultName'), '/DynamicsClientId')]",
+            "apiVersion": "2019-09-01",
+            "location": "[variables('location')]",
+            "properties": {
+                "value": "[parameters('dynamicsClientId')]"
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "condition": "[parameters('includeDynamicsSecrets')]",
+            "name": "[concat(variables('keyVaultName'), '/DynamicsClientSecret')]",
+            "apiVersion": "2019-09-01",
+            "location": "[variables('location')]",
+            "properties": {
+                "value": "[parameters('dynamicsClientSecret')]"
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "condition": "[not(parameters('iotHubIncludedInPipeline'))]",
+            "name": "[concat(variables('keyVaultName'), '/', parameters('iotHubServiceSecretName'))]",
+            "apiVersion": "2019-09-01",
+            "location": "[variables('location')]",
+            "properties": {
+                "value": "[parameters('iotHubServiceSecret')]"
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "condition": "[not(parameters('iotHubIncludedInPipeline'))]",
+            "name": "[concat(variables('keyVaultName'), '/', parameters('iotHubDeviceSecretName'))]",
+            "apiVersion": "2019-09-01",
+            "location": "[variables('location')]",
+            "properties": {
+                "value": "[parameters('iotHubDeviceSecret')]"
+            }
+        }
+    ],
+    "outputs": {
+    }
+}

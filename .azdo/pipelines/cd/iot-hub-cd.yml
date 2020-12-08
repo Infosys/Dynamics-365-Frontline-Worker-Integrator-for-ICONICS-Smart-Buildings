@@ -1,0 +1,51 @@
+# Variables to be configured during pipeline creation/execution
+# groupId
+# environment
+# location
+# resourceGroupName
+# azureServiceConnectionName
+# iotHub
+# iotDeviceName
+# iotWorkOrderDeviceName
+
+trigger:
+ branches:
+   include:
+     - main
+ paths:
+   include:
+     - /deployment/azure/iot-hub/*
+
+stages:
+- stage: Deployment
+  jobs:
+  - job: AzureResourceDeployment
+    pool: 
+      vmImage: 'ubuntu-18.04'
+    steps:
+    - template: ../../pipelines/templates/deploy-azure.yml
+      parameters: 
+        name: DeployIoTHub
+        deploymentMode: Incremental
+        ARMTemplateFile: $(Build.Repository.LocalPath)/deployment/azure/iot-hub/azure-deploy.json
+        ARMParametersFile: $(Build.Repository.LocalPath)/deployment/azure/iot-hub/azure-deploy-parameters-$(environment).json
+    - task: AzureCLI@2
+      displayName: CreateIotHubFaultDevice
+      inputs:
+        azureSubscription: $(azureServiceConnectionName)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        workingDirectory: $(Build.Repository.LocalPath)/deployment/azure/scripts/
+        inlineScript: |
+          chmod a+x create-iot-device.sh
+          echo "##vso[task.setvariable variable=iotFaultDeviceKey]$(./create-iot-device.sh $(groupId)$(environment)$(location)iot-$(iotHub) $(iotDeviceName))"
+    - task: AzureCLI@2
+      displayName: CreateIotHubWorkOrderDevice
+      inputs:
+        azureSubscription: $(azureServiceConnectionName)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        workingDirectory: $(Build.Repository.LocalPath)/deployment/azure/scripts/
+        inlineScript: |
+          chmod a+x create-iot-device.sh
+          echo "##vso[task.setvariable variable=iotWorkOrderDeviceKey]$(./create-iot-device.sh $(groupId)$(environment)$(location)iot-$(iotHub) $(iotWorkOrderDeviceName))"

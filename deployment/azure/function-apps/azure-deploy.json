@@ -1,0 +1,129 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "groupId": {
+            "type": "string",
+            "metadata": {
+                "description": "The group name to use for creating resource names"
+            }
+        },
+        "environment": {
+            "type": "string",
+            "defaultValue": "d",
+            "metadata": {
+                "description": "The alphabetical character that identifies the deployment environment to use in the name for each created resource. For example, values include 'd' for development, 't' for test, 's' for staging, and 'p' for production."
+            }
+        },
+        "topicName": {
+            "type": "string",
+            "defaultValue": "fault-ingress",
+            "metadata": {
+                "description": "The name of the service bus topic to add to the configuration."
+            }
+        },
+        "subscriptionName": {
+            "type": "string",
+            "defaultValue": "connector",
+            "metadata": {
+                "description": "The name of the service bus subscription to add to the configuration."
+            }
+        },
+        "dynamicsEndpoint": {
+            "type": "string",
+            "metadata": {
+                "description": "The url to the instance of dynamics to use for this function app."
+            }
+        },
+        "iotHubName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the already existing IoT Hub to use for Submit work order acknowledgement message to ICONICS"
+            }
+        },
+        "iotHubDeviceName": {
+            "type": "string",
+            "defaultValue": "BXConnector-Dynamics",
+            "metadata": {
+                "description": "The iot hub device name to use for Submit work order acknowledgement message to ICONICS"
+            }
+        },
+        "iotHubSharedAccessPolicyName": {
+            "type": "string",
+            "defaultValue": "device",
+            "metadata": {
+                "description":"The name of an already existing shared access policy for the IoT Hub to add to the configuration"
+            }
+        },
+        "iotHubSecretName": {
+            "type": "string",
+            "defaultValue": "IoTDeviceKey-faults",
+            "metadata": {
+                "description": "The name of the IoTHub Secret to store in the vault."
+            }
+        },
+        "workOrderCreateQueueName": {
+            "type": "string",
+            "defaultValue": "work-order-create",
+            "metadata": {
+                "description": "The name of the service bus work order create queue to add to the configuration"
+            }
+        },
+        "errorQueueName": {
+            "type": "string",
+            "defaultValue": "create-alert-error",
+            "metadata": {
+                "description": "The name of the service bus error queue to add to the configuration."
+            }
+        }
+    },
+    "variables": {
+        "location": "[resourceGroup().location]",
+        "baseName": "[toLower(concat(parameters('groupId'), parameters('environment'), variables('location')))]",
+        "functionAppName": "[concat(variables('baseName'), 'fa')]",
+        "keyVaultName": "[concat(variables('baseName'), 'kvt')]",
+        "storageConnectionStringName": "StorageConnectionString",
+        "circuitBreakerFunctionAppName": "[concat(variables('functionAppName'), '-circuit-breaker')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "name": "[concat(variables('keyVaultName'), '/CircuitBreakerFunctionKey')]",
+            "apiVersion": "2019-09-01",
+            "location": "[variables('location')]",
+            "properties": {
+                "value": "[listKeys(concat(resourceId('Microsoft.Web/sites', variables('circuitBreakerFunctionAppName')), '/host/default'), '2016-08-01').functionKeys.default]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites/config",
+            "apiVersion": "2020-06-01",
+            "name": "[concat(variables('functionAppName'), '/appsettings')]",
+            "properties": {
+                "AzureWebJobsStorage": "[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), variables('storageConnectionStringName')), '2019-09-01').secretUriWithVersion, ')')]",
+                "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING": "[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), variables('storageConnectionStringName')), '2019-09-01').secretUriWithVersion, ')')]",
+                "WEBSITE_CONTENTSHARE": "[variables('functionAppName')]",
+                "FUNCTIONS_EXTENSION_VERSION": "~3",
+                "FUNCTIONS_WORKER_RUNTIME": "dotnet",
+                "APPINSIGHTS_INSTRUMENTATIONKEY": "[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'InstrumentationKey'), '2019-09-01').secretUriWithVersion, ')')]",
+                "WEBSITE_RUN_FROM_PACKAGE": "1",
+                "ServiceBusTopic": "[parameters('topicName')]",
+                "ServiceBusSubscription": "[parameters('subscriptionName')]",
+                "ServiceBusErrorQueue": "[parameters('errorQueueName')]",
+                "WorkOrderCreateQueueName":"[parameters('workOrderCreateQueueName')]",
+                "DynamicsEnvironmentUrl": "[parameters('dynamicsEndpoint')]",
+                "DynamicsClientId": "[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'DynamicsClientId'), '2019-09-01').secretUriWithVersion, ')')]",
+                "DynamicsClientSecret": "[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'DynamicsClientSecret'), '2019-09-01').secretUriWithVersion, ')')]",
+                "ServiceBusConnection": "[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'ServiceBusConnectionSendListen'), '2019-09-01').secretUriWithVersion, ')')]",
+                "IoTHubName":"[parameters('iotHubName')]",
+                "IoTHubSharedAccessPolicyName":"[parameters('iotHubSharedAccessPolicyName')]",
+                "IoTHubSharedAccessPolicyKey":"[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), parameters('iotHubSecretName')), '2019-09-01').secretUriWithVersion, ')')]",
+                "IotHubDeviceName":"[parameters('iotHubDeviceName')]",
+                "ResourceId": "[concat(resourceGroup().id, '/providers/Microsoft.Web/sites/', variables('functionAppName'))]",
+                "CircuitBreakerEnabled": "true",
+                "CircuitRequestUri": "[concat('https://',variables('circuitBreakerFunctionAppName'),'.azurewebsites.net/api/CircuitBreaker')]",
+                "FunctionAppKey": "[concat('@Microsoft.KeyVault(SecretUri=', reference(resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'CircuitBreakerFunctionKey'), '2019-09-01').secretUriWithVersion, ')')]"
+            }
+        }
+    ]
+}

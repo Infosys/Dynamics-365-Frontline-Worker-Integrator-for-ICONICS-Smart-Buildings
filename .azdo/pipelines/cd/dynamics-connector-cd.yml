@@ -1,0 +1,39 @@
+# Variables to be configured during pipeline creation/execution
+# groupId
+# environment
+# location
+# azureServiceConnectionName
+# connectorCIPipelineID
+
+trigger:
+ branches:
+   include:
+     - main
+ paths:
+   include:
+     - /src/azure/dynamics-connector/*
+
+stages:
+- stage: Deployment
+  jobs:
+  - job: 'DynamicsConnectorDeploy'
+    pool: 
+      vmImage: 'ubuntu-18.04'
+    steps:
+    - task: DownloadPipelineArtifact@2
+      name: 'DownloadArtifactory'
+      inputs:
+        source: 'specific'
+        project: $(System.TeamProjectId)
+        pipeline: $(connectorCIPipelineID)
+        runVersion: 'latestFromBranch'
+        runBranch: $(Build.SourceBranch)
+        artifact: 'DynamicsConnector'
+        path: $(Build.ArtifactStagingDirectory)
+    - task: AzureFunctionApp@1
+      name: 'DynamicsConnectorDeploy'
+      inputs:
+        azureSubscription: $(azureServiceConnectionName)
+        appType: functionApp
+        appName: '$(groupId)$(environment)$(location)fa'
+        package: $(Build.ArtifactStagingDirectory)/**/*.zip

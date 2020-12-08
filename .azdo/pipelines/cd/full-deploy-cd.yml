@@ -1,0 +1,137 @@
+# Variables to be configured during pipeline creation/execution
+# groupId
+# environment
+# location
+# resourceGroupName
+# azureServiceConnectionName
+# dynamicsClientId
+# dynamicsClientSecret
+# iotHubServiceSecret
+# iotHubDeviceSecret
+# includeIoTHub
+# iotHub
+# iotDeviceName
+# iotWorkOrderDeviceName
+# connectorCIPipelineID
+# circuitBreakerCIPipelineID
+
+trigger: none
+
+stages:
+- stage: AzureDeployment
+  jobs:
+  - job: AzureResourceDeployment
+    pool: 
+      vmImage: 'ubuntu-18.04'
+    steps:
+    - template: ../../pipelines/templates/deploy-azure.yml
+      parameters: 
+        name: DeployFoundationalResources
+        deploymentMode: Incremental
+        ARMTemplateFile: $(Build.Repository.LocalPath)/deployment/azure/azure-deploy.json
+        ARMParametersFile: $(Build.Repository.LocalPath)/deployment/azure/azure-deploy-parameters-$(environment).json
+    - template: ../../pipelines/templates/deploy-azure.yml
+      parameters: 
+        name: DeployIoTHub
+        deployCondition: and(succeeded(), eq(variables['includeIoTHub'], true))
+        deploymentMode: Incremental
+        ARMTemplateFile: $(Build.Repository.LocalPath)/deployment/azure/iot-hub/azure-deploy.json
+        ARMParametersFile: $(Build.Repository.LocalPath)/deployment/azure/iot-hub/azure-deploy-parameters-$(environment).json
+    - task: AzureCLI@2
+      displayName: CreateIotHubFaultDevice
+      condition: and(succeeded(), eq(variables['includeIoTHub'], true))
+      inputs:
+        azureSubscription: $(azureServiceConnectionName)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        workingDirectory: $(Build.Repository.LocalPath)/deployment/azure/scripts/
+        inlineScript: |
+          chmod a+x create-iot-device.sh
+          echo "##vso[task.setvariable variable=iotFaultDeviceKey]$(./create-iot-device.sh $(groupId)$(environment)$(location)iot-$(iotHub) $(iotDeviceName))"
+    - task: AzureCLI@2
+      displayName: CreateIotWorkOrderDevice
+      condition: and(succeeded(), eq(variables['includeIoTHub'], true))
+      inputs:
+        azureSubscription: $(azureServiceConnectionName)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        workingDirectory: $(Build.Repository.LocalPath)/deployment/azure/scripts/
+        inlineScript: |
+          chmod a+x create-iot-device.sh
+          echo "##vso[task.setvariable variable=iotWorkOrderDeviceKey]$(./create-iot-device.sh $(groupId)$(environment)$(location)iot-$(iotHub) $(iotWorkOrderDeviceName))"
+    - template: ../../pipelines/templates/deploy-azure.yml
+      parameters: 
+        name: DeployExternalSecrets
+        deploymentMode: Incremental
+        ARMTemplateFile: $(Build.Repository.LocalPath)/deployment/azure/key-vault-secrets/azure-deploy.json
+        overrideParameters: -environment $(environment) -groupId $(groupId) -dynamicsClientId $(dynamicsClientId) -dynamicsClientSecret $(dynamicsClientSecret) -iotHubIncludedInPipeline $(includeIoTHub) -iotHubServiceSecret $(iotHubServiceSecret) -iotHubDeviceSecret $(iotHubDeviceSecret)
+- stage: AzureLogicLayer
+  dependsOn: AzureDeployment
+  jobs:
+  - job: DeployLogicLayer
+    pool: 
+      vmImage: 'ubuntu-18.04'
+    steps:
+    - template: ../../pipelines/templates/deploy-azure.yml
+      parameters: 
+        name: DeployFunctionAppSettings
+        deploymentMode: Incremental
+        ARMTemplateFile: $(Build.Repository.LocalPath)/deployment/azure/function-apps/azure-deploy.json
+        ARMParametersFile: $(Build.Repository.LocalPath)/deployment/azure/function-apps/azure-deploy-parameters-$(environment).json
+    - template: ../../pipelines/templates/deploy-azure.yml
+      parameters: 
+        name: DeployWorkOrderAckLogicApp
+        deploymentMode: Incremental
+        ARMTemplateFile: $(Build.Repository.LocalPath)/deployment/azure/logic-apps/work-order-ack/azure-deploy.json
+        ARMParametersFile: $(Build.Repository.LocalPath)/deployment/azure/logic-apps/work-order-ack/azure-deploy-parameters-$(environment).json
+    - template: ../../pipelines/templates/deploy-azure.yml
+      parameters: 
+        name: DeployStreamAnalytics
+        deploymentMode: Incremental
+        ARMTemplateFile: $(Build.Repository.LocalPath)/deployment/azure/stream-analytics/azure-deploy.json
+        ARMParametersFile: $(Build.Repository.LocalPath)/deployment/azure/stream-analytics/azure-deploy-parameters-$(environment).json
+- stage: CodeDeployment
+  dependsOn: AzureLogicLayer
+  jobs:
+  - job: 'DynamicsConnectorDeploy'
+    pool: 
+      vmImage: 'ubuntu-18.04'
+    steps:
+    - task: DownloadPipelineArtifact@2
+      name: 'DownloadArtifactory'
+      inputs:
+        source: 'specific'
+        project: $(System.TeamProjectId)
+        pipeline: $(connectorCIPipelineID)
+        runVersion: 'latestFromBranch'
+        runBranch: $(Build.SourceBranch)
+        artifact: 'DynamicsConnector'
+        path: $(Build.ArtifactStagingDirectory)
+    - task: AzureFunctionApp@1
+      name: 'DynamicsConnectorDeploy'
+      inputs:
+        azureSubscription: $(azureServiceConnectionName)
+        appType: functionApp
+        appName: '$(groupId)$(environment)$(location)fa'
+        package: $(Build.ArtifactStagingDirectory)/**/*.zip
+  - job: 'CircuitBreakerDeploy'
+    pool: 
+      vmImage: 'ubuntu-18.04'
+    steps:
+    - task: DownloadPipelineArtifact@2
+      name: 'DownloadArtifactory'
+      inputs:
+        source: 'specific'
+        project: $(System.TeamProjectId)
+        pipeline: $(circuitBreakerCIPipelineID)
+        runVersion: 'latestFromBranch'
+        runBranch: $(Build.SourceBranch)
+        artifact: 'CircuitBreaker'
+        path: $(Build.ArtifactStagingDirectory)
+    - task: AzureFunctionApp@1
+      name: 'CircuitBreakerDeploy'
+      inputs:
+        azureSubscription: $(azureServiceConnectionName)
+        appType: functionApp
+        appName: '$(groupId)$(environment)$(location)fa-circuit-breaker'
+        package: $(Build.ArtifactStagingDirectory)/**/*.zip

@@ -1,0 +1,25 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "iotHubName": {
+            "value" : "SmartBuildingsIoTHub"
+        },
+        "iotHubSharedAccessPolicyKey": {
+            "reference": {
+                "keyVault": {
+                "id": "/subscriptions/c18bfbc4-318d-4d67-9de2-c2c7f93fc95f/resourceGroups/CSEInfosysConnector-staging/providers/Microsoft.KeyVault/vaults/fldsrv1seastuskvt"
+                },
+                "secretName": "IoTServiceKey-faults"
+            }
+        },
+        "serviceBusSharedAccessPolicyKey": {
+            "reference": {
+                "keyVault": {
+                "id": "/subscriptions/c18bfbc4-318d-4d67-9de2-c2c7f93fc95f/resourceGroups/CSEInfosysConnector-staging/providers/Microsoft.KeyVault/vaults/fldsrv1seastuskvt"
+                },
+                "secretName": "ServiceBusKeySend"
+            }
+        }
+    }
+}

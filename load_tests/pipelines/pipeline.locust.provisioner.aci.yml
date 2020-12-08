@@ -1,0 +1,237 @@
+name: aci_$(LOCUST_TEST_NAME)_$(TARGET_CONFIG)_$(PROFILE_CONFIG)_$(Date:yyyyMMdd)_$(Rev:rrr)
+
+trigger:
+  - none
+
+resources:
+  - repo: self
+
+pool:
+  vmImage: "ubuntu-18.04"
+
+variables:
+  - name: tfWorkingDirectory
+    value: "$(System.DefaultWorkingDirectory)/load_tests/terraform/aci"
+  - name: tfStateFile
+    value: "$(tfWorkingDirectory)/terraform.tfstate"
+  - name: tfPlanFile
+    value: "$(tfWorkingDirectory)/terraform.tfplan"
+  - name: tfVarsProfileConfigFile
+    value: "$(System.DefaultWorkingDirectory)/load_tests/config/profiles/$(PROFILE_CONFIG).tfvars"
+  - name: tfVarsTargetConfigFile
+    value: "$(System.DefaultWorkingDirectory)/load_tests/config/targets/$(TARGET_CONFIG).tfvars"
+
+steps:
+  - task: Bash@3
+    displayName: "Check input variables"
+    inputs:
+      targetType: "inline"
+      script: |
+        if [ -z "${PROFILE_CONFIG}" ]; then
+            echo "ERROR: PROFILE_CONFIG not configured!" >&2
+            echo "Available profiles:"
+            ls "$(System.DefaultWorkingDirectory)/load_tests/config/profiles"
+            exit 1
+        fi
+        if [ -z "${TARGET_CONFIG}" ]; then
+            echo "ERROR: TARGET_CONFIG not configured!" >&2
+            echo "Available targets:"
+            ls "$(System.DefaultWorkingDirectory)/load_tests/config/targets"
+            exit 1
+        fi
+      failOnStderr: true
+
+  - task: Bash@3
+    displayName: "Prepare test package"
+    inputs:
+      targetType: "inline"
+      script: |
+        tar -zcf "$(tfWorkingDirectory)/locust.tar.gz" -C "$(System.DefaultWorkingDirectory)/load_tests/tests/" .
+      workingDirectory: $(tfWorkingDirectory)
+      failOnStderr: true
+
+  - task: Bash@3
+    displayName: "Prepare TF Vars"
+    inputs:
+      targetType: "inline"
+      script: |
+        cat <<EOF > temp.auto.tfvars
+        EOF
+
+        echo "location = \"$(AZURE_RESOURCE_LOCATION)\"" >> temp.auto.tfvars
+        echo "locust_version = \"$(LOCUST_VERSION)\"" >> temp.auto.tfvars
+
+        if [ "${SYSTEM_DEBUG}" = "true" ]; then
+          echo "debug = true" >> temp.auto.tfvars
+        fi
+
+        cat <<EOF > overriders.tfvars
+        EOF
+
+        if [ -n "${LOCUST_TEST_NAME}" ]; then
+          echo "locust_test_name = \"${LOCUST_TEST_NAME}\"" >> overriders.tfvars
+        fi
+      workingDirectory: $(tfWorkingDirectory)
+      failOnStderr: true
+
+  - task: AzureCLI@2
+    displayName: "Prepare Target Vars"
+    inputs:
+      azureSubscription: "$(SUT_SERVICE_CONNECTION_NAME)"
+      scriptType: "bash"
+      scriptLocation: "inlineScript"
+      inlineScript: |
+        az extension add --name azure-iot
+        IOT_HUB_SAS_TOKEN=$(az iot hub generate-sas-token --query sas -o tsv -n $(IOT_HUB_NAME))
+
+        echo "iot_hub_name = \"$(IOT_HUB_NAME)\"" >> temp.auto.tfvars
+        echo "iot_hub_sas_token = \"$IOT_HUB_SAS_TOKEN\"" >>  temp.auto.tfvars
+      workingDirectory: $(tfWorkingDirectory)
+      failOnStderr: true
+
+  - task: TerraformInstaller@0
+    inputs:
+      terraformVersion: 'latest'
+
+  - task: TerraformCLI@0
+    displayName: "Terraform Init"
+    inputs:
+      command: "init"
+      workingDirectory: $(tfWorkingDirectory)
+
+  - task: TerraformCLI@0
+    displayName: "Terraform Plan"
+    inputs:
+      command: "plan"
+      workingDirectory: "$(tfWorkingDirectory)"
+      environmentServiceName: "$(AZURERM_SERVICE_CONNECTION_NAME)"
+      commandOptions: "-var-file $(tfVarsProfileConfigFile) -var-file $(tfVarsTargetConfigFile) -var-file overriders.tfvars -state=$(tfStateFile) -out=$(tfPlanFile)"
+
+  - task: TerraformCLI@0
+    displayName: "Terraform Apply"
+    inputs:
+      command: "apply"
+      workingDirectory: "$(tfWorkingDirectory)"
+      environmentServiceName: "$(AZURERM_SERVICE_CONNECTION_NAME)"
+      commandOptions: "-var-file $(tfVarsProfileConfigFile) -var-file $(tfVarsTargetConfigFile) -var-file overriders.tfvars -state=$(tfStateFile)"
+
+  - task: Bash@3
+    displayName: "Read Terraform outputs"
+    inputs:
+      targetType: "inline"
+      script: |
+        set -eu
+        echo "[$(date +"%F %T")] Setting variables from Terraform outputs ..."
+        tfOutput=`terraform output -state=$(tfStateFile) -json`
+        # echo ${tfOutput} > "$(Build.ArtifactStagingDirectory)/terraform/output.json"
+        echo ${tfOutput} | jq -r '
+                . as $in
+                | keys[]
+                | ["- " + .]
+                | @tsv'
+        echo ${tfOutput} | jq -r '
+                . as $in
+                | keys[]
+                | ($in[.].value | tostring) as $value
+                | ($in[.].sensitive | tostring) as $sensitive
+                | [
+                  "- " + . + ": " + if $in[.].sensitive then "(sensitive)" else $value end,  # output name to console
+                  "##vso[task.setvariable variable=" + . + ";isSecret=" + $sensitive + "]" + $value,  # set as ADO task variable
+                  "##vso[task.setvariable variable=" + . + ";isOutput=true;isSecret=" + $sensitive + "]" + $value  # also set as ADO job variable
+                  ]
+                | .[]'
+      workingDirectory: $(tfWorkingDirectory)
+      failOnStderr: true
+
+  - task: AzureCLI@2
+    displayName: "Wait Test Execution"
+    inputs:
+      azureSubscription: "$(AZURERM_SERVICE_CONNECTION_NAME)"
+      scriptType: "bash"
+      scriptLocation: "inlineScript"
+      inlineScript: |
+        echo "`date`: Locust Uniquer: $(LOCUST_UNIQUER)"
+        echo "`date`: Started!"
+        
+        while [ $(az container show -g $(LOCUST_RG_NAME) -n $(LOCUST_MASTER_ACI_NAME) --query "containers[0].instanceView.currentState.state" -o tsv) == "Running" ]; do
+          echo "`date`: Tests are running ..."
+          sleep 20
+        done
+
+        containerMasterExitCode=$(az container show -g $(LOCUST_RG_NAME) -n $(LOCUST_MASTER_ACI_NAME) --query containers[0].instanceView.currentState.exitCode -o tsv)
+        echo "`date`: Finished with status code = $containerMasterExitCode."
+        exit $containerMasterExitCode
+      failOnStandardError: true
+
+  - task: AzureCLI@2
+    displayName: "Summary"
+    inputs:
+      azureSubscription: "$(AZURERM_SERVICE_CONNECTION_NAME)"
+      scriptType: "bash"
+      scriptLocation: "inlineScript"
+      inlineScript: |
+        tenantId=`az account show --query tenantId --output tsv`
+
+        echo "# ACI" > "$(Build.ArtifactStagingDirectory)/Summary.md"
+        echo "" >> "$(Build.ArtifactStagingDirectory)/Summary.md"
+        echo "## Parameters" >> "$(Build.ArtifactStagingDirectory)/Summary.md"
+        echo "" >> "$(Build.ArtifactStagingDirectory)/Summary.md"
+        echo "* LOCUST_UNIQUER: $(LOCUST_UNIQUER)" >> "$(Build.ArtifactStagingDirectory)/Summary.md"
+        echo "" >> "$(Build.ArtifactStagingDirectory)/Summary.md"
+        echo "## Links" >> "$(Build.ArtifactStagingDirectory)/Summary.md"
+        echo "" >> "$(Build.ArtifactStagingDirectory)/Summary.md"
+        echo "* RG: [https://portal.azure.com/#@${tenantId}/resource$(locust_rg_id)/overview](https://portal.azure.com/#@${tenantId}/resource$(locust_rg_id)/overview)" >> "$(Build.ArtifactStagingDirectory)/Summary.md"
+        echo "* Locust Master: [https://portal.azure.com/#@${tenantId}/resource$(locust_master_resources_id)/containers](https://portal.azure.com/#@${tenantId}/resource$(locust_master_resources_id)/containers)" >> "$(Build.ArtifactStagingDirectory)/Summary.md"
+
+        echo "##vso[task.uploadsummary]$(Build.ArtifactStagingDirectory)/Summary.md"
+      failOnStandardError: true
+
+  - task: AzureCLI@2
+    displayName: "Download CSV results"
+    condition: always()
+    inputs:
+      azureSubscription: $(AZURERM_SERVICE_CONNECTION_NAME)
+      scriptType: "bash"
+      scriptLocation: "inlineScript"
+      inlineScript: |
+        az storage copy --source-account-name $(LOCUST_STORAGE_NAME) --source-share locust --include-path results --recursive --destination-local-path "$(Build.ArtifactStagingDirectory)/results"
+      workingDirectory: "$(System.DefaultWorkingDirectory)/pipelines/pipeline_scripts"
+      failOnStandardError: false
+
+  - task: PublishPipelineArtifact@1
+    displayName: "Publish Results to Artifact Hub"
+    condition: always()
+    inputs:
+      targetPath: "$(Build.ArtifactStagingDirectory)/results"
+      artifact: "results"
+      publishLocation: "pipeline"
+
+  - task: AzureCLI@2
+    displayName: "Download Logs"
+    condition: always()
+    inputs:
+      azureSubscription: $(AZURERM_SERVICE_CONNECTION_NAME)
+      scriptType: "bash"
+      scriptLocation: "inlineScript"
+      inlineScript: |
+        az storage copy --source-account-name $(LOCUST_STORAGE_NAME) --source-share locust --include-path logs --recursive --destination-local-path "$(Build.ArtifactStagingDirectory)/logs"
+      failOnStandardError: false
+
+  - task: PublishPipelineArtifact@1
+    displayName: "Publish Logs to Artifact Hub"
+    condition: always()
+    inputs:
+      targetPath: "$(Build.ArtifactStagingDirectory)/logs/locust/logs"
+      artifact: "logs"
+      publishLocation: "pipeline"
+
+  - task: AzureCLI@2
+    displayName: "Destroy infrastructure"
+    condition: always()
+    inputs:
+      azureSubscription: $(AZURERM_SERVICE_CONNECTION_NAME)
+      scriptType: "bash"
+      scriptLocation: "inlineScript"
+      inlineScript: |
+        az group delete --yes --resource-group $(LOCUST_RG_NAME)
+      failOnStandardError: true

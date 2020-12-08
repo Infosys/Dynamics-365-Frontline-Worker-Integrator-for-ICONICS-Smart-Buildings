@@ -1,0 +1,38 @@
+# Variables to be configured during pipeline creation/execution
+# groupId
+# environment
+# location
+# resourceGroupName
+# azureServiceConnectionName
+
+trigger:
+ branches:
+   include:
+     - main
+ paths:
+   include:
+     - /deployment/azure/stream-analytics/*
+
+stages:
+- stage: Deployment
+  jobs:
+  - job: AzureResourceDeployment
+    pool: 
+      vmImage: 'ubuntu-18.04'
+    steps:
+    - task: AzureCLI@2
+      displayName: Stop Stream Analytics Job
+      continueOnError: true
+      inputs:
+        azureSubscription: $(azureServiceConnectionName)
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          az extension add --name stream-analytics --yes
+          az stream-analytics job stop --resource-group $(resourceGroupName) --name $(groupId)$(environment)$(location)sa
+    - template: ../../pipelines/templates/deploy-azure.yml
+      parameters: 
+        name: DeployStreamAnalytics
+        deploymentMode: Incremental
+        ARMTemplateFile: $(Build.Repository.LocalPath)/deployment/azure/stream-analytics/azure-deploy.json
+        ARMParametersFile: $(Build.Repository.LocalPath)/deployment/azure/stream-analytics/azure-deploy-parameters-$(environment).json

@@ -1,0 +1,16 @@
+{
+  "DynamicsEnvironmentUrl": "https://environment.crm.dynamics.com",
+  "DynamicsClientId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "DynamicsClientSecret": "xxxxxxxxxxx",
+  "ServiceBusConnectionString": "Endpoint=sb://xxxxxxxxxx.servicebus.windows.net/;SharedAccessKeyName=xxxxxxxxxx;SharedAccessKey=xxxxxxxxxxxxxxxxxxx",
+  "IoTHubDeviceConnectionString": "HostName=xxxxxxxxx.azure-devices.net;DeviceId=BXConnector;SharedAccessKey=xxxxxxxxxxxxxxxxx",
+  "IoTHubEventHubEndpoint": "Endpoint=sb://xxxxxxxxxxxx.servicebus.windows.net/;SharedAccessKeyName=xxxxxxxx;SharedAccessKey=xxxxxxxxxxxxxxxxx",
+  "IoTHubEventHubName": "xxxxxxxxxxxxxx",
+  "WorkOrderQueueName": "work-order-create",
+  "CreateAlertErrorQueueName": "create-alert-error",
+  "CreateAlertTopicName": "fault-ingress",
+  "CreateAlertTopicSubscriptionName": "connector",
+  "VerificationRetrySeconds": 10,
+  "VerificationMaxRetries": 5,
+  "ShouldCreateWorkOrder": true
+}

@@ -1,0 +1,8 @@
+{
+  "MessageId": 3,
+  "AssetName": "A15",
+  "AssetPath": "PugetSound\\WestCampus\\B121\\VSVAV\\L01\\A15",
+  "FaultName": "Manual Override -  Cooling Loopout",
+  "FaultActiveTime": "2020-08-05T03:11:24.923+00:00",
+  "MessageSource": "ICONICS FDD"
+}

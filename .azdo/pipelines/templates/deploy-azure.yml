@@ -1,0 +1,27 @@
+parameters:
+  deploymentMode: ''
+  ARMTemplateFile: ''
+  ARMParametersFile: ''
+  name: ''
+  overrideParameters: ''
+  deployCondition: succeeded()
+
+steps:
+- task: AzureResourceGroupDeployment@2
+  name: ${{ parameters.name }}
+  condition: ${{ parameters.deployCondition }}
+  inputs:
+    azureSubscription: $(azureServiceConnectionName)
+    action: 'Create Or Update Resource Group'
+    resourceGroupName: $(resourceGroupName)
+    location: $(location)
+    templateLocation: Linked artifact
+    csmFile: ${{ parameters.ARMTemplateFile }}
+    ${{ if ne(parameters.ARMParametersFile, '') }}:
+      csmParametersFile: ${{ parameters.ARMParametersFile }}
+    deploymentMode: ${{ parameters.deploymentMode }}
+    deploymentName: ${{ parameters.name }}-$(Build.BuildNumber)
+    ${{ if eq(parameters['overrideParameters'], '') }}:
+      overrideParameters: -environment $(environment) -groupId $(groupId)
+    ${{ if ne(parameters['overrideParameters'], '') }}:
+      overrideParameters: ${{ parameters.overrideParameters }}

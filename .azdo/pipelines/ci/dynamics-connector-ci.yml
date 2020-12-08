@@ -1,0 +1,21 @@
+# Variables to be configured during pipeline creation/execution
+# codeCoverageThreshold
+
+trigger:
+ branches:
+   include:
+     - main
+ paths:
+   include:
+     - /src/azure/dynamics-connector/
+
+stages:
+- stage: Validation
+  jobs:
+  - template: ../../pipelines/templates/dotnet-build.yml
+    parameters: 
+      name: 'DynamicsConnector'
+      sourceCodePath: '**/src/azure/dynamics-connector/dynamics-connector/*.csproj'
+      testCodePath: '**/src/azure/dynamics-connector/dynamics-connector-tests.unit/*.csproj'
+      buildConfiguration: 'Release'
+      codeCoverageThreshold: '$(codeCoverageThreshold)'

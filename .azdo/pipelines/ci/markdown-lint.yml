@@ -1,0 +1,16 @@
+jobs:
+- job: markdown_lint
+  pool:
+    vmImage: "ubuntu-latest"
+
+  steps:
+    - task: Npm@1
+      displayName: 'Install NPM packages'
+      inputs:
+        command: install 
+
+    - task: Npm@1
+      displayName: 'Run Markdown lint'
+      inputs:
+        command: custom
+        customCommand: 'run lint'

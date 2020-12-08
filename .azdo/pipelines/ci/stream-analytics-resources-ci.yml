@@ -1,0 +1,22 @@
+# Variables to be configured during pipeline creation/execution
+# groupId
+# environment
+# location
+# resourceGroupName
+# azureServiceConnectionName
+
+trigger: none
+
+stages:
+- stage: Validation
+  jobs:
+  - job: AzureResourceDeployment
+    pool: 
+      vmImage: 'ubuntu-18.04'
+    steps:
+    - template: ../../pipelines/templates/deploy-azure.yml
+      parameters: 
+        name: ValidateStreamAnalytics
+        deploymentMode: Validation
+        ARMTemplateFile: $(Build.Repository.LocalPath)/deployment/azure/stream-analytics/azure-deploy.json
+        ARMParametersFile: $(Build.Repository.LocalPath)/deployment/azure/stream-analytics/azure-deploy-parameters-$(environment).json

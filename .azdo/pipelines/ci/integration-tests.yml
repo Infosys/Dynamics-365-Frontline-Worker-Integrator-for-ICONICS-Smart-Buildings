@@ -1,0 +1,49 @@
+# Variables to be configured during pipeline creation/execution
+# DynamicsEnvironmentUrl
+# DynamicsClientId
+# DynamicsClientSecret
+# ServiceBusConnectionString
+# IoTHubDeviceConnectionString
+# IoTHubEventHubEndpoint
+# IoTHubEventHubName
+# WorkOrderQueueName
+# CreateAlertErrorQueueName
+# CreateAlertTopicName
+# CreateAlertTopicSubscriptionName
+# VerificationRetrySeconds
+# VerificationMaxRetries
+# ShouldCreateWorkOrder
+
+trigger: none
+
+variables:
+  buildConfiguration: "Release"
+
+steps:
+  - task: DotNetCoreCLI@2
+    displayName: Build
+    inputs:
+      command: build
+      projects: "**/src/azure/dynamics-connector/dynamics-connector/*.csproj"
+      arguments: "--configuration $(buildConfiguration)"
+  - task: DotNetCoreCLI@2
+    displayName: IntegrationTests
+    inputs:
+      command: test
+      projects: "**/src/azure/dynamics-connector/dynamics-connector-tests.integration/*.csproj"
+      arguments: "--configuration $(buildConfiguration)"
+    env:
+      DynamicsEnvironmentUrl: $(DynamicsEnvironmentUrl)
+      DynamicsClientId: $(DynamicsClientId)
+      DynamicsClientSecret: $(DynamicsClientSecret)
+      ServiceBusConnectionString: $(ServiceBusConnectionString)
+      IoTHubDeviceConnectionString: $(IoTHubDeviceConnectionString)
+      IoTHubEventHubEndpoint: $(IoTHubEventHubEndpoint)
+      IoTHubEventHubName: $(IoTHubEventHubName)
+      WorkOrderQueueName: $(WorkOrderQueueName)
+      CreateAlertErrorQueueName: $(CreateAlertErrorQueueName)
+      CreateAlertTopicName: $(CreateAlertTopicName)
+      CreateAlertTopicSubscriptionName: $(CreateAlertTopicSubscriptionName)
+      VerificationRetrySeconds: $(VerificationRetrySeconds)
+      VerificationMaxRetries: $(VerificationMaxRetries)
+      ShouldCreateWorkOrder: $(ShouldCreateWorkOrder)

@@ -1,0 +1,17 @@
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - /src/azure/device-simulator/
+
+stages:
+- stage: Validation
+  jobs:
+  - template: ../../pipelines/templates/dotnet-build.yml
+    parameters: 
+      name: 'DeviceSimulator'
+      sourceCodePath: '**/src/azure/device-simulator/*.csproj'
+      testCodePath: ''
+      buildConfiguration: 'Release'

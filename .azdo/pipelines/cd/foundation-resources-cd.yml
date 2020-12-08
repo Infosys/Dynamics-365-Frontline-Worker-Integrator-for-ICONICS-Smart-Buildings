@@ -1,0 +1,29 @@
+# Variables to be configured during pipeline creation/execution
+# groupId
+# environment
+# location
+# resourceGroupName
+# azureServiceConnectionName
+
+trigger:
+ branches:
+   include:
+     - main
+ paths:
+   include:
+     - /deployment/azure/azure-deploy.json
+     - /deployment/azure/azure-deploy-parameters-*.json
+
+stages:
+- stage: Deployment
+  jobs:
+  - job: AzureResourceDeployment
+    pool: 
+      vmImage: 'ubuntu-18.04'
+    steps:
+    - template: ../../pipelines/templates/deploy-azure.yml
+      parameters: 
+        name: DeployFoundationalResources
+        deploymentMode: Incremental
+        ARMTemplateFile: $(Build.Repository.LocalPath)/deployment/azure/azure-deploy.json
+        ARMParametersFile: $(Build.Repository.LocalPath)/deployment/azure/azure-deploy-parameters-$(environment).json

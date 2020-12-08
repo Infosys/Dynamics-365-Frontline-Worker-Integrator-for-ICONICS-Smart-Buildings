@@ -1,0 +1,467 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "comments": "This entry made purely to test CI/CD pipelines triggers. DELETE ME once pipelines validated.",
+        "author": "Shawn Gaul"
+    },
+    "parameters": {
+        "groupId": {
+            "type": "string",
+            "metadata": {
+                "description": "The group name to use for creating resource names"
+            }
+        },
+        "environment": {
+            "type": "string",
+            "defaultValue": "d",
+            "metadata": {
+                "description": "The alphabetical character that identifies the deployment environment to use in the name for each created resource. For example, values include 'd' for development, 't' for test, 's' for staging, and 'p' for production."
+            }
+        },
+        "queueName": {
+            "type": "string",
+            "defaultValue": "work-order-create",
+            "metadata": {
+                "description": "The name of the service bus queue to use in action."
+            }
+        },
+        "dynamicsEndpoint": {
+            "type": "string",
+            "defaultValue": "msftindustryinn.crm",
+            "metadata": {
+                "description": "The CRM OrgName to the instance of dyanmics to use for this logic app trigger and action."
+            }
+        },
+        "clientId": {
+            "type": "securestring",
+            "metadata": {
+            "description": "Client (or Application) ID of the Azure Active Directory application."
+            }
+        },
+        "clientSecret": {
+            "type": "securestring",
+            "metadata": {
+            "description": "Client secret of the Azure Active Directory application."
+            }
+        },
+        "tenantId": {
+            "type": "securestring",
+            "defaultValue": "[subscription().tenantId]",
+            "metadata": {
+            "description": "Tenant ID of the Azure Active Directory application where the Dynamics CRM instance resides."
+            }
+        },
+        "ServiceBusConnectionString": {
+            "type": "securestring",
+            "metadata": {
+            "description": "Service Bus ConnectionString"
+            }
+        }
+    },
+    "variables": {
+        "location": "[resourceGroup().location]",
+        "baseName": "[toLower(concat(parameters('groupId'), parameters('environment'), variables('location')))]",
+        "logicAppName": "[concat(variables('baseName'), 'la-work-order-ack')]",
+        "baseConnectionsId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('location'), '/managedApis/')]",
+        "serviceBusConnectionId": "[concat(variables('baseConnectionsId'), 'servicebus')]",
+        "CDSConnectionId": "[concat(variables('baseConnectionsId'), 'commondataservice')]",
+        "serviceBusConnectionName": "servicebus",
+        "CDSConnectionName": "commondataservice",
+        "getWorkOrderURL": "/tables/@{encodeURIComponent(encodeURIComponent('msdyn_workorders'))}/onnewitemswebhook",
+        "getAppModuleURL": "/tables/@{encodeURIComponent(encodeURIComponent('appmodules'))}/items",
+        "getIoTAlertURL": "/tables/@{encodeURIComponent(encodeURIComponent('msdyn_iotalerts'))}/items/@{encodeURIComponent(encodeURIComponent(triggerBody()?['_msdyn_iotalert_value']))}",
+        "diagnosticSettingsName": "[concat(variables('logicAppName'), '.Diagnostics')]",
+        "operationalWorkspaceName": "[concat(variables('baseName'), 'log')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('serviceBusConnectionName')]",
+            "location": "[variables('location')]",
+            "properties": {
+                "displayName": "[variables('serviceBusConnectionName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[variables('serviceBusConnectionId')]"
+                },
+                "parameterValues": {
+                    "connectionString": "[parameters('ServiceBusConnectionString')]"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/connections",
+            "apiVersion": "2016-06-01",
+            "name": "[variables('CDSConnectionName')]",
+            "location": "[variables('location')]",
+            "properties": {
+                "displayName": "[variables('CDSConnectionName')]",
+                "customParameterValues": {
+                },
+                "api": {
+                    "id": "[variables('CDSConnectionId')]"
+                },
+                "parameterValues": {
+                    "token:clientId": "[parameters('clientId')]",
+                    "token:clientSecret": "[parameters('clientSecret')]",
+                    "token:TenantId": "[parameters('tenantId')]",
+                    "token:grantType": "client_credentials"
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Logic/workflows",
+            "apiVersion": "2017-07-01",
+            "name": "[variables('logicAppName')]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/connections', variables('serviceBusConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('CDSConnectionName'))]"
+            ],
+            "properties": {
+                "state": "Enabled",
+                "definition": {
+                    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {
+                        "$connections": {
+                            "defaultValue": {},
+                            "type": "Object"
+                        }
+                    },
+                    "triggers": {
+                        "When_a_work_order_record_is_created": {
+                            "type": "ApiConnectionWebhook",
+                            "inputs": {
+                                "body": {
+                                    "NotificationUrl": "@{listCallbackUrl()}"
+                                },
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['commondataservice_1']['connectionId']"
+                                    }
+                                },
+                                "path": "[concat('/datasets/',parameters('dynamicsEndpoint'),variables('getWorkOrderURL'))]",
+                                "queries": {
+                                    "scope": "Organization"
+                                }
+                            }
+                        }
+                    },
+                    "actions": {
+                        "Check_if_work_order_is_created_from_IOT_Alert": {
+                            "actions": {
+                                "Check_Required_Field": {
+                                    "actions": {
+                                        "AppID": {
+                                            "runAfter": {
+                                                "Get_AppID": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": "@body('Get_AppID')?['value']?[0]?.appmoduleid"
+                                        },
+                                        "CRMURL": {
+                                            "runAfter": {
+                                                "AppID": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": "@first(split(first(body('Get_AppID')?['value'])?['@odata.id'],'/api/'))"
+                                        },
+                                        "Compose_Environment_Hostname": {
+                                            "runAfter": {},
+                                            "type": "Compose",
+                                            "inputs": "@ uriHost(outputs('Get_IOT_Alert_record_associated_to_work_order')?['body/@odata.id']) "
+                                        },
+                                        "Get_AppID": {
+                                            "runAfter": {
+                                                "Compose_Environment_Hostname": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['commondataservice_1']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "get",
+                                                "path": "[concat('/v2/datasets/',parameters('dynamicsEndpoint'),variables('getAppModuleURL'))]",
+                                                "queries": {
+                                                    "$filter": "uniquename  eq 'msdyn_FieldService'",
+                                                    "$top": 1
+                                                }
+                                            }
+                                        },
+                                        "Prepare_response": {
+                                            "runAfter": {
+                                                "RecordURL": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": {
+                                                "AssetPath": "@{body('Parse_Alert_Data_JSON')?['AssetPath']}",
+                                                "FaultActiveTime": "@{body('Parse_Alert_Data_JSON')?['FaultActiveTime']}",
+                                                "FaultName": "@{body('Parse_Alert_Data_JSON')?['FaultName']}",
+                                                "WorkOrderCreatedOn": "@{triggerBody()?['createdon']}",
+                                                "WorkOrderId": "@{triggerBody()?['msdyn_workorderid']}",
+                                                "WorkOrderModifiedOn": "@{triggerBody()?['modifiedon']}",
+                                                "WorkOrderStatus": "WorkOrderCreated",
+                                                "WorkOrderUrl": "@{outputs('RecordURL')}"
+                                            }
+                                        },
+                                        "RecordURL": {
+                                            "runAfter": {
+                                                "CRMURL": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "Compose",
+                                            "inputs": "@{outputs('CRMURL')}/main.aspx?appid=@{outputs('AppID')}&pagetype=entityrecord&etn=msdyn_workorder&id=@{triggerBody()?['msdyn_workorderid']}"
+                                        },
+                                        "Send_message": {
+                                            "runAfter": {
+                                                "Prepare_response": [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type": "ApiConnection",
+                                            "inputs": {
+                                                "body": {
+                                                    "ContentData": "@{base64(outputs('Prepare_response'))}",
+                                                    "ContentType": "application/json"
+                                                },
+                                                "host": {
+                                                    "connection": {
+                                                        "name": "@parameters('$connections')['servicebus']['connectionId']"
+                                                    }
+                                                },
+                                                "method": "post",
+                                                "path": "[concat('/',parameters('queueName'),'/messages')]",
+                                                "queries": {
+                                                    "systemProperties": "None"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter": {
+                                        "Parse_Alert_Data_JSON": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "expression": {
+                                        "and": [
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@body('Parse_Alert_Data_JSON')?['AssetName']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@body('Parse_Alert_Data_JSON')?['AssetPath']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            },
+                                            {
+                                                "not": {
+                                                    "equals": [
+                                                        "@body('Parse_Alert_Data_JSON')?['FaultActiveTime']",
+                                                        "@null"
+                                                    ]
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    "type": "If"
+                                },
+                                "Get_IOT_Alert_record_associated_to_work_order": {
+                                    "runAfter": {},
+                                    "type": "ApiConnection",
+                                    "inputs": {
+                                        "host": {
+                                            "connection": {
+                                                "name": "@parameters('$connections')['commondataservice_1']['connectionId']"
+                                            }
+                                        },
+                                        "method": "get",
+                                        "path": "[concat('/v2/datasets/',parameters('dynamicsEndpoint'),variables('getIoTAlertURL'))]"
+                                    }
+                                },
+                                "Parse_Alert_Data_JSON": {
+                                    "runAfter": {
+                                        "Get_IOT_Alert_record_associated_to_work_order": [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "type": "ParseJson",
+                                    "inputs": {
+                                        "content": "@body('Get_IOT_Alert_record_associated_to_work_order')?['msdyn_alertdata']",
+                                        "schema": {
+                                            "properties": {
+                                                "AssetName": {
+                                                    "type": "string"
+                                                },
+                                                "AssetPath": {
+                                                    "type": "string"
+                                                },
+                                                "FaultActiveTime": {
+                                                    "type": "string"
+                                                },
+                                                "FaultCostValue": {
+                                                    "type": "string"
+                                                },
+                                                "FaultName": {
+                                                    "type": "string"
+                                                },
+                                                "MessageSource": {
+                                                    "type": "string"
+                                                },
+                                                "RelatedValue1": {
+                                                    "type": "string"
+                                                },
+                                                "RelatedValue10": {
+                                                    "type": "string"
+                                                },
+                                                "RelatedValue11": {
+                                                    "type": "string"
+                                                },
+                                                "RelatedValue12": {
+                                                    "type": "string"
+                                                },
+                                                "RelatedValue13": {
+                                                    "type": "string"
+                                                },
+                                                "RelatedValue14": {
+                                                    "type": "string"
+                                                },
+                                                "RelatedValue15": {
+                                                    "type": "string"
+                                                },
+                                                "RelatedValue16": {
+                                                    "type": "string"
+                                                },
+                                                "RelatedValue17": {
+                                                    "type": "string"
+                                                },
+                                                "RelatedValue18": {
+                                                    "type": "string"
+                                                },
+                                                "RelatedValue19": {
+                                                    "type": "string"
+                                                },
+                                                "RelatedValue2": {
+                                                    "type": "string"
+                                                },
+                                                "RelatedValue20": {
+                                                    "type": "string"
+                                                },
+                                                "RelatedValue3": {
+                                                    "type": "string"
+                                                },
+                                                "RelatedValue4": {
+                                                    "type": "string"
+                                                },
+                                                "RelatedValue5": {
+                                                    "type": "string"
+                                                },
+                                                "RelatedValue6": {
+                                                    "type": "string"
+                                                },
+                                                "RelatedValue7": {
+                                                    "type": "string"
+                                                },
+                                                "RelatedValue8": {
+                                                    "type": "string"
+                                                },
+                                                "RelatedValue9": {
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    }
+                                }
+                            },
+                            "runAfter": {},
+                            "expression": {
+                                "and": [
+                                    {
+                                        "not": {
+                                            "equals": [
+                                                "@triggerBody()?['_msdyn_iotalert_value']",
+                                                "@null"
+                                            ]
+                                        }
+                                    }
+                                ]
+                            },
+                            "type": "If"
+                        }
+                    },
+                    "outputs": {
+                        "logicAppName": {
+                            "type": "string",
+                            "value": "[variables('logicAppName')]"
+                        }
+                    }
+                },
+                "parameters": {
+                    "$connections": {
+                        "value": {
+                            "commondataservice_1": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('CDSConnectionName'))]",
+                                "connectionName": "commondataservice",
+                                "id": "[variables('CDSConnectionId')]"
+                            },
+                            "servicebus": {
+                                "connectionId": "[resourceId('Microsoft.Web/connections', variables('serviceBusConnectionName'))]",
+                                "connectionName": "servicebus",
+                                "id": "[variables('serviceBusConnectionId')]"
+                            }
+                        }
+                    }
+                }
+        },
+        "resources":[
+            {
+                "type": "Providers/DiagnosticSettings",
+                "name": "[concat('Microsoft.Insights/', variables('diagnosticSettingsName'))]",
+                "dependsOn": [
+                    "[resourceId('Microsoft.Logic/workflows', variables('logicAppName'))]"
+                ],
+                "apiVersion": "2017-05-01-preview",
+                "properties": {
+                    "name": "[variables('diagnosticSettingsName')]",
+                    "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('operationalWorkspaceName'))]",
+                    "mode": "Incremental",
+                    "logs": [
+                        {
+                            "category": "WorkflowRuntime",
+                            "enabled": true
+                        }
+                    ],
+                    "metrics": [
+                        {
+                            "timeGrain": "PT1M",
+                            "enabled": true
+                        }
+                    ]
+                }
+            }
+        ]
+}
+    ]
+}

@@ -1,0 +1,190 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "groupId": {
+            "type": "string",
+            "metadata": {
+                "description": "The group name to use for creating resource names"
+            }
+        },
+        "environment": {
+            "type": "string",
+            "defaultValue": "d",
+            "metadata": {
+                "description": "The alphabetical character that identifies the deployment environment to use in the name for each created resource. For example, values include 'd' for development, 't' for test, 's' for staging, and 'p' for production."
+            }
+        },
+        "topicName": {
+            "type": "string",
+            "defaultValue": "fault-ingress",
+            "metadata": {
+                "description": "The name of the Service Bus topic to add to the configuration."
+            }
+        },
+        "iotHubName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the already existing IoT Hub as the input"
+            }
+        },
+        "consumerGroupName": {
+            "type": "string",
+            "defaultValue": "$Default",
+            "metadata": {
+                "description": "The name of an already existing consumer group on the IoT Hub"
+            }
+        },
+        "iotHubSharedAccessPolicyName": {
+            "type": "string",
+            "defaultValue": "service",
+            "metadata": {
+                "description": "The name of an already existing shared access policy for the IoT Hub"
+            }
+        },
+        "iotHubSharedAccessPolicyKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "The IoT Hub shared access policy key"
+            }
+        },
+        "iotHubFaultDeviceId": {
+            "type": "string",
+            "defaultValue": "BXConnector",
+            "metadata": {
+                "description": "Name of the Device with IoT Hub which receives the faults from ICONICS"
+            }           
+        },
+        "serviceBusSharedAccessPolicyName": {
+            "type": "string",
+            "defaultValue": "connector-send-key",
+            "metadata": {
+                "description": "The name of an existing shared access policy for the Service Bus"
+            }
+        },
+        "serviceBusSharedAccessPolicyKey": {
+            "type": "securestring",
+            "metadata": {
+                "description": "The Service Bus shared access policy key"
+            }
+        }
+    },
+    "variables": {
+        "location": "[resourceGroup().location]",
+        "baseName": "[toLower(concat(parameters('groupId'), parameters('environment'), variables('location')))]",
+        "streamAnalyticsJobName": "[concat(variables('baseName'), 'sa')]",
+        "serviceBusName": "[concat(variables('baseName'), 'sb')]",
+        "streamAnalyticsTransform": "sa-transform",
+        "operationalWorkspaceName": "[concat(variables('baseName'), 'log')]"
+    },
+    "resources": [
+        {
+            "name": "[variables('streamAnalyticsJobName')]",
+            "type": "Microsoft.StreamAnalytics/streamingjobs",
+            "apiVersion": "2017-04-01-preview",
+            "location": "[variables('location')]",
+            "tags": {},
+            "properties": {
+                "sku": {
+                    "name": "Standard"
+                },
+                "compatibilityLevel": "1.2",
+                "inputs": [
+                    {
+                        "name": "fault-input",
+                        "properties": {
+                            "type": "Stream",
+                            "datasource": {
+                                "type": "Microsoft.Devices/IotHubs",
+                                "properties": {
+                                    "iotHubNamespace": "[parameters('iotHubName')]",
+                                    "sharedAccessPolicyName": "[parameters('iotHubSharedAccessPolicyName')]",
+                                    "sharedAccessPolicyKey": "[parameters('iotHubSharedAccessPolicyKey')]",
+                                    "consumerGroupName": "[parameters('consumerGroupName')]",
+                                    "endpoint": "messages/events"
+                                }
+                            },
+                            "serialization": {
+                                "properties": {
+                                    "encoding": "UTF8"
+                                },
+                                "type": "Json"
+                            }
+
+                        }
+                    }
+                ],
+                "transformation": {
+                    "name": "[variables('streamAnalyticsTransform')]",
+                    "properties": {
+                        "streamingUnits": 3,
+                        "query": "[concat('SELECT * INTO [fault-output] FROM [fault-input] WHERE IoTHub.ConnectionDeviceId = ''', parameters('iotHubFaultDeviceId'), ''' AND MessageSource = ''ICONICS FDD''')]"
+
+                    }
+                },
+                "outputs": [
+                    {
+                        "name": "fault-output",
+                        "properties": {
+                            "datasource": {
+                                "type": "Microsoft.ServiceBus/Topic",
+                                "properties": {
+                                    "serviceBusNamespace": "[variables('serviceBusName')]",
+                                    "sharedAccessPolicyName": "[parameters('serviceBusSharedAccessPolicyName')]",
+                                    "sharedAccessPolicyKey": "[parameters('serviceBusSharedAccessPolicyKey')]",
+                                    "topicName": "[parameters('topicName')]",
+                                    "propertyColumns": [
+                                        "string"
+                                    ]
+                                }
+                            },
+                            "serialization": {
+                                "properties": {
+                                    "encoding": "UTF8"
+                                },
+                                "type": "Json"
+                            }
+                        }
+                    }
+                ]
+            },
+            "resources": [
+                {
+                    "type": "Providers/DiagnosticSettings",
+                    "name": "[concat('Microsoft.Insights/', variables('streamAnalyticsJobName'), '.Diagnostics')]",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.StreamAnalytics/streamingjobs', variables('streamAnalyticsJobName'))]"
+                    ],
+                    "apiVersion": "2017-05-01-preview",
+                    "properties": {
+                        "name": "[concat(variables('streamAnalyticsJobName'), '.Diagnostics')]",
+                        "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('operationalWorkspaceName'))]",
+                        "mode": "Incremental",
+                        "logs": [
+                            {
+                                "category": "Execution",
+                                "enabled": true
+                            },
+                            {
+                                "category": "Authoring",
+                                "enabled": true
+                            }
+                        ],
+                        "metrics": [
+                            {
+                                "category": "AllMetrics",
+                                "enabled": true
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    ],
+    "outputs": {
+        "streamAnalyticsJobName": {
+            "type": "string",
+            "value": "[variables('streamAnalyticsJobName')]"
+        }
+    }
+}

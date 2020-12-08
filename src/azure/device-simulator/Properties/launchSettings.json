@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "DeviceSimulator": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "IoTHubDeviceConnString": "HostName=xxxxxxx.azure-devices.net;DeviceId=xxxxx;SharedAccessKey=xxxxxxxxx"
+      }
+    }
+  }
+}
