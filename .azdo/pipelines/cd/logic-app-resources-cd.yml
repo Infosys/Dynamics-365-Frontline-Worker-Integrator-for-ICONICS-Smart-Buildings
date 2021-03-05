@@ -22,6 +22,12 @@ stages:
     steps:
     - template: ../../pipelines/templates/deploy-azure.yml
       parameters: 
+        name: DeployWorkOrderCreateLogicApp
+        deploymentMode: Incremental
+        ARMTemplateFile: $(Build.Repository.LocalPath)/deployment/azure/logic-apps/work-order-create/azure-deploy.json
+        ARMParametersFile: $(Build.Repository.LocalPath)/deployment/azure/logic-apps/work-order-create/azure-deploy-parameters-$(environment).json
+    - template: ../../pipelines/templates/deploy-azure.yml
+      parameters: 
         name: DeployWorkOrderAckLogicApp
         deploymentMode: Incremental
         ARMTemplateFile: $(Build.Repository.LocalPath)/deployment/azure/logic-apps/work-order-ack/azure-deploy.json

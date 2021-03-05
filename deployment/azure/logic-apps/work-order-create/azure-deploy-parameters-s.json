@@ -28,14 +28,6 @@
                 },
                 "secretName": "DynamicsTenantId"
             }
-        },
-        "ServiceBusConnectionString": {
-            "reference": {
-                "keyVault": {
-                    "id": "/subscriptions/c18bfbc4-318d-4d67-9de2-c2c7f93fc95f/resourceGroups/CSEInfosysConnector-staging/providers/Microsoft.KeyVault/vaults/fldsrv1seastuskvt"
-                },
-                "secretName": "ServiceBusConnectionSend"
-            }
         }
     }
   }

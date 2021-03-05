@@ -6,6 +6,7 @@
 # azureServiceConnectionName
 # dynamicsClientId
 # dynamicsClientSecret
+# dynamicsTenantId
 # iotHubServiceSecret
 # iotHubDeviceSecret
 # includeIoTHub
@@ -64,7 +65,7 @@ stages:
         name: DeployExternalSecrets
         deploymentMode: Incremental
         ARMTemplateFile: $(Build.Repository.LocalPath)/deployment/azure/key-vault-secrets/azure-deploy.json
-        overrideParameters: -environment $(environment) -groupId $(groupId) -dynamicsClientId $(dynamicsClientId) -dynamicsClientSecret $(dynamicsClientSecret) -iotHubIncludedInPipeline $(includeIoTHub) -iotHubServiceSecret $(iotHubServiceSecret) -iotHubDeviceSecret $(iotHubDeviceSecret)
+        overrideParameters: -environment $(environment) -groupId $(groupId) -dynamicsClientId $(dynamicsClientId) -dynamicsClientSecret $(dynamicsClientSecret) -dynamicsTenantId $(dynamicsTenantId) -iotHubIncludedInPipeline $(includeIoTHub) -iotHubServiceSecret $(iotHubServiceSecret) -iotHubDeviceSecret $(iotHubDeviceSecret)
 - stage: AzureLogicLayer
   dependsOn: AzureDeployment
   jobs:
@@ -78,6 +79,12 @@ stages:
         deploymentMode: Incremental
         ARMTemplateFile: $(Build.Repository.LocalPath)/deployment/azure/function-apps/azure-deploy.json
         ARMParametersFile: $(Build.Repository.LocalPath)/deployment/azure/function-apps/azure-deploy-parameters-$(environment).json
+    - template: ../../pipelines/templates/deploy-azure.yml
+      parameters: 
+        name: DeployWorkOrderCreateLogicApp
+        deploymentMode: Incremental
+        ARMTemplateFile: $(Build.Repository.LocalPath)/deployment/azure/logic-apps/work-order-create/azure-deploy.json
+        ARMParametersFile: $(Build.Repository.LocalPath)/deployment/azure/logic-apps/work-order-create/azure-deploy-parameters-$(environment).json
     - template: ../../pipelines/templates/deploy-azure.yml
       parameters: 
         name: DeployWorkOrderAckLogicApp

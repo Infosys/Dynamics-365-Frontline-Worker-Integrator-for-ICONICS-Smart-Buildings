@@ -10,29 +10,14 @@
 # az login
 # az account set --subscription {name or id of subscription}
 
+PARAMETERS_FILE_NAME="deploy-parameters.sh"
+
+# Load the paramters file
+source $PARAMETERS_FILE_NAME
+
 # Base variables
-GROUPID="scg51"
-ENVIRONMENT="d"
-LOCATION="westus2"
 BASE_NAME="$GROUPID$ENVIRONMENT$LOCATION"
-RESOURCE_GROUP_NAME="${BASE_NAME}rg"
-SKU="standard"
 DEPLOYMENT_NUMBER=$RANDOM
-
-# Dynamics Variables
-DYNAMICS_ENDPOINT="msftindustryinn.crm"
-DYNAMICS_URL="https://${DYNAMICS_ENDPOINT}.dynamics.com"
-DYNAMICS_CLIENT_ID="XXXXXXXXXXXX"
-DYNAMICS_SECRET="XXXXXXXXXXXX"
-DYNAMICS_TENANT_ID="XXXXXXXXXXXX"
-
-# IoT Hub Variables
-INCLUDE_IOT_HUB="true" # Should be either "true" or "false"
-IOT_HUB_NAME="${BASE_NAME}iot-faults" # Replace with external IoT Hub Name if INCLUDE_IOT_HUB is set to "false"
-IOT_HUB_SERVICE_SECRET="XXXXXXXXXXX" # Required if INCLUDE_IOT_HUB is set to "false"
-IOT_HUB_DEVICE_SECRET="XXXXXXXXXXX" # Required if INCLUDE_IOT_HUB is set to "false"
-IOT_HUB_FAULT_DEVICE_ID="BXConnector" # Required if INCLUDE_IOT_HUB is set to "true"
-IOT_HUB_WORKORDER_DEVICE_ID="BXConnector-Dynamics" # Required if INCLUDE_IOT_HUB is set to "true"
 
 SUBSCRIPTION_ID=$(az account show -o json --query "id" | tr -d \")
 SUBSCRIPTION_NAME=$(az account show -o json --query "name" | tr -d \")
@@ -138,6 +123,17 @@ az deployment group create \
     -n "CLI-Work-Order-Ack-Logic-App-${DEPLOYMENT_NUMBER}" \
     -f ../logic-apps/work-order-ack/azure-deploy.json \
     -p "${PARAMETERS}"
+
+if [ "$AUTO_WO_CREATE" == "true" ]; then
+    echo "Deploying Work Order Create Logic App"
+    PARAMETERS="{ \"groupId\": { \"value\": \"${GROUPID}\" }, \"environment\": { \"value\": \"${ENVIRONMENT}\" }, \"dynamicsEndpoint\": { \"value\": \"${DYNAMICS_ENDPOINT}\" }, \"clientId\": { \"reference\": { \"keyVault\": { \"id\": \"${VAULT_ID}\" }, \"secretName\": \"DynamicsClientId\" } }, \"clientSecret\": { \"reference\": { \"keyVault\": { \"id\": \"${VAULT_ID}\" }, \"secretName\": \"DynamicsClientSecret\" } }, \"tenantId\": { \"value\": \"${DYNAMICS_TENANT_ID}\" } }"
+    echo "Parameters: ${PARAMETERS}"
+    az deployment group create \
+        -g $RESOURCE_GROUP_NAME \
+        -n "CLI-Work-Order-Create-Logic-App-${DEPLOYMENT_NUMBER}" \
+        -f ../logic-apps/work-order-create/azure-deploy.json \
+        -p "${PARAMETERS}"
+fi
 
 CODE_DIRECTORY="../../../src/azure/dynamics-connector/dynamics-connector"
 cd $CODE_DIRECTORY

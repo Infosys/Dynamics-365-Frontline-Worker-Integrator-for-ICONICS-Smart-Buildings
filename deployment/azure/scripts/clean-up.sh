@@ -55,6 +55,9 @@ az extension add -n logic
 echo "Deleting ${BASE_NAME}la-work-order-ack from ${RESOURCE_GROUP_NAME}"
 az logic workflow delete -n "${BASE_NAME}la-work-order-ack" -g "$RESOURCE_GROUP_NAME" -y
 
+echo "Deleting ${BASE_NAME}la-work-order-create from ${RESOURCE_GROUP_NAME}"
+az logic workflow delete -n "${BASE_NAME}la-work-order-create" -g "$RESOURCE_GROUP_NAME" -y
+
 echo "Deleting servicebus connection from ${RESOURCE_GROUP_NAME}"
 az resource delete --resource-type 'Microsoft.Web/connections' -n "servicebus" -g "$RESOURCE_GROUP_NAME"
 

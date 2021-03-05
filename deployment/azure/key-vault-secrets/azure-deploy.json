@@ -36,6 +36,13 @@
                 "description": "The value of the Dynamics Client Secret to store in the vault."
             }
         },
+        "dynamicsTenantId": {
+            "type": "securestring",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The value of the Dynamics Tenant Id to store in the vault."
+            }
+        },
         "iotHubIncludedInPipeline": {
             "type": "bool",
             "defaultValue": true,
@@ -96,6 +103,16 @@
             "location": "[variables('location')]",
             "properties": {
                 "value": "[parameters('dynamicsClientSecret')]"
+            }
+        },
+        {
+            "type": "Microsoft.KeyVault/vaults/secrets",
+            "condition": "[parameters('includeDynamicsSecrets')]",
+            "name": "[concat(variables('keyVaultName'), '/DynamicsTenantId')]",
+            "apiVersion": "2019-09-01",
+            "location": "[variables('location')]",
+            "properties": {
+                "value": "[parameters('dynamicsTenantId')]"
             }
         },
         {

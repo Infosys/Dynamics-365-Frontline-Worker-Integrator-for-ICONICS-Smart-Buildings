@@ -16,6 +16,12 @@ stages:
     steps:
     - template: ../../pipelines/templates/deploy-azure.yml
       parameters: 
+        name: ValidateWorkOrderCreateLogicApp
+        deploymentMode: Validation
+        ARMTemplateFile: $(Build.Repository.LocalPath)/deployment/azure/logic-apps/work-order-create/azure-deploy.json
+        ARMParametersFile: $(Build.Repository.LocalPath)/deployment/azure/logic-apps/work-order-create/azure-deploy-parameters-$(environment).json
+    - template: ../../pipelines/templates/deploy-azure.yml
+      parameters: 
         name: ValidateWorkOrderAckLogicApp
         deploymentMode: Validation
         ARMTemplateFile: $(Build.Repository.LocalPath)/deployment/azure/logic-apps/work-order-ack/azure-deploy.json

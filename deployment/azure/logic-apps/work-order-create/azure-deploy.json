@@ -1,0 +1,1056 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "groupId": {
+        "type": "string",
+        "metadata": {
+          "description": "The group name to use for creating resource names"
+        }
+      },
+      "environment": {
+        "type": "string",
+        "defaultValue": "d",
+        "metadata": {
+          "description": "The alphabetical character that identifies the deployment environment to use in the name for each created resource. For example, values include 'd' for development, 't' for test, 's' for staging, and 'p' for production."
+        }
+      },
+      "dynamicsEndpoint": {
+        "type": "string",
+        "metadata": {
+          "description": "The CRM OrgName to the instance of dyanmics to use for this logic app trigger and action."
+        }
+      },
+      "clientId": {
+        "type": "securestring",
+        "metadata": {
+          "description": "Client (or Application) ID of the Azure Active Directory application."
+        }
+      },
+      "clientSecret": {
+        "type": "securestring",
+        "metadata": {
+          "description": "Client secret of the Azure Active Directory application."
+        }
+      },
+      "tenantId": {
+        "type": "securestring",
+        "metadata": {
+          "description": "Tenant ID of the Azure Active Directory application where the Dynamics CRM instance resides."
+        }
+      }
+    },
+    "variables": {
+      "location": "[resourceGroup().location]",
+      "baseName": "[toLower(concat(parameters('groupId'), parameters('environment'), variables('location')))]",
+      "logicAppName": "[concat(variables('baseName'), 'la-work-order-create')]",
+      "baseConnectionsId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', variables('location'), '/managedApis/')]",
+      "CDSConnectionId": "[concat(variables('baseConnectionsId'), 'commondataservice')]",
+      "CDSConnectionName": "commondataservice",
+      "getIotAlertCreatedtURL": "/tables/@{encodeURIComponent(encodeURIComponent('msdyn_iotalerts'))}/onnewitemswebhook",
+      "getWorkOrderURL": "/tables/@{encodeURIComponent(encodeURIComponent('msdyn_workorders'))}/onnewitemswebhook",
+      "getAppModuleURL": "/tables/@{encodeURIComponent(encodeURIComponent('appmodules'))}/items",
+      "diagnosticSettingsName": "[concat(variables('logicAppName'), '.Diagnostics')]",
+      "operationalWorkspaceName": "[concat(variables('baseName'), 'log')]",
+      "getCustomerAssestValueURL": "/tables/@{encodeURIComponent(encodeURIComponent('msdyn_customerassets'))}/items/@{encodeURIComponent(encodeURIComponent(triggerBody()?['_msdyn_customerasset_value']))}",
+      "getAccountValueURL": "/tables/@{encodeURIComponent(encodeURIComponent('accounts'))}/items/@{encodeURIComponent(encodeURIComponent(body('Customer_asset_details_associated_to_IoT_alert')?['_msdyn_account_value']))}",
+      "getBookableResourceBookingListURL": "/tables/@{encodeURIComponent(encodeURIComponent('bookableresourcebookings'))}/items",
+      "getBookableResourceValueURL": "/tables/@{encodeURIComponent(encodeURIComponent('bookableresources'))}/items/@{encodeURIComponent(encodeURIComponent(variables('Resource')))}",
+      "getTimeZoneDefinitionListURL": "/tables/@{encodeURIComponent(encodeURIComponent('timezonedefinitions'))}/items",
+      "getIoTAlertValueURL": "/tables/@{encodeURIComponent(encodeURIComponent('msdyn_iotalerts'))}/items/@{encodeURIComponent(encodeURIComponent(triggerBody()?['msdyn_iotalertid']))}",
+      "getResourceTerritoriesListURL": "/tables/@{encodeURIComponent(encodeURIComponent('msdyn_resourceterritories'))}/items",
+      "getBookingStatusListURL": "/tables/@{encodeURIComponent(encodeURIComponent('bookingstatuses'))}/items",
+      "getIncidentsListURL": "/tables/@{encodeURIComponent(encodeURIComponent('incidents'))}/items",
+      "getIncidentTypesListURL": "/tables/@{encodeURIComponent(encodeURIComponent('msdyn_incidenttypes'))}/items",
+      "getPriceLevelListURL": "/tables/@{encodeURIComponent(encodeURIComponent('pricelevels'))}/items",
+      "getPrioritiesListURL": "/tables/@{encodeURIComponent(encodeURIComponent('msdyn_priorities'))}/items",
+      "getWorkOrderTypesListURL": "/tables/@{encodeURIComponent(encodeURIComponent('msdyn_workordertypes'))}/items",
+      "getWorkOrderListURL": "/tables/@{encodeURIComponent(encodeURIComponent('msdyn_workorders'))}/items"
+    },
+    "resources": [
+      {
+        "type": "Microsoft.Web/connections",
+        "apiVersion": "2016-06-01",
+        "name": "[variables('CDSConnectionName')]",
+        "location": "[variables('location')]",
+        "properties": {
+          "displayName": "[variables('CDSConnectionName')]",
+          "customParameterValues": {
+          },
+          "api": {
+            "id": "[variables('CDSConnectionId')]"
+          },
+          "parameterValues": {
+            "token:clientId": "[parameters('clientId')]",
+            "token:clientSecret": "[parameters('clientSecret')]",
+            "token:TenantId": "[parameters('tenantId')]",
+            "token:grantType": "client_credentials"
+          }
+        }
+      },
+      {
+        "type": "Microsoft.Logic/workflows",
+        "apiVersion": "2017-07-01",
+        "name": "[variables('logicAppName')]",
+        "location": "[variables('location')]",
+        "dependsOn": [
+          "[resourceId('Microsoft.Web/connections', variables('CDSConnectionName'))]"
+        ],
+        "properties": {
+          "state": "Enabled",
+          "definition": {
+            "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+            "actions": {
+              "Check_variable_values_from_parse_data": {
+                "actions": {
+                  "Bookable_Resource_Booking": {
+                    "actions": {
+                      "Check_if_count_of_resource_in_territory_is_greater_than_0": {
+                        "actions": {
+                          "Bookable_resource_booking_created_for_work_order_created_": {
+                            "inputs": {
+                              "body": {
+                                "_bookingstatus_value": "@variables('Booking Status')",
+                                "_msdyn_workorder_value": "@body('Work_order_Creation_for_IoT_alert')?['msdyn_workorderid']",
+                                "_ownerid_type": "",
+                                "_resource_value": "@variables('Resource')",
+                                "bookingtype": 1,
+                                "endtime": "@{addHours(variables('Start Date'),2)}",
+                                "msdyn_acceptcascadecrewchanges": false,
+                                "msdyn_allowoverlapping": false,
+                                "msdyn_cascadecrewchanges": false,
+                                "msdyn_preventtimestampcreation": false,
+                                "msdyn_traveltimerescheduling": false,
+                                "starttime": "@variables('Start Date')"
+                              },
+                              "host": {
+                                "connection": {
+                                  "name": "@parameters('$connections')['commondataservice']['connectionId']"
+                                }
+                              },
+                              "method": "post",
+                              "path": "[concat('/v2/datasets/',parameters('dynamicsEndpoint'),variables('getBookableResourceBookingListURL'))]"
+                            },
+                            "runAfter": {
+                              "Set_start_date_variable": [
+                                "Succeeded"
+                              ]
+                            },
+                            "type": "ApiConnection"
+                          },
+                          "Convert_time_zone": {
+                            "inputs": {
+                              "baseTime": "@{addDays(utcNow(),1)}",
+                              "destinationTimeZone": "@variables('Time Zone Name')",
+                              "formatString": "MM-dd-yyyy h:mm",
+                              "sourceTimeZone": "@variables('Time Zone Name')"
+                            },
+                            "kind": "ConvertTimeZone",
+                            "runAfter": {
+                              "Loop_through_time_zone_definition_details_": [
+                                "Succeeded"
+                              ]
+                            },
+                            "type": "Expression"
+                          },
+                          "Get_bookable_resource_details": {
+                            "inputs": {
+                              "host": {
+                                "connection": {
+                                  "name": "@parameters('$connections')['commondataservice']['connectionId']"
+                                }
+                              },
+                              "method": "get",
+                              "path": "[concat('/v2/datasets/',parameters('dynamicsEndpoint'),variables('getBookableResourceValueURL'))]"
+                            },
+                            "runAfter": {
+                              "Loop_through_resource_territory_details_": [
+                                "Succeeded"
+                              ]
+                            },
+                            "type": "ApiConnection"
+                          },
+                          "Get_time_zone_definitions_details_": {
+                            "inputs": {
+                              "host": {
+                                "connection": {
+                                  "name": "@parameters('$connections')['commondataservice']['connectionId']"
+                                }
+                              },
+                              "method": "get",
+                              "path": "[concat('/v2/datasets/',parameters('dynamicsEndpoint'),variables('getTimeZoneDefinitionListURL'))]",
+                              "queries": {
+                                "$filter": "timezonecode eq @{variables('Time Zone Code')}",
+                                "$top": 1
+                              }
+                            },
+                            "runAfter": {
+                              "Set_time_zone_code_variable": [
+                                "Succeeded"
+                              ]
+                            },
+                            "type": "ApiConnection"
+                          },
+                          "Loop_through_resource_territory_details_": {
+                            "actions": {
+                              "Set_resource_variable": {
+                                "inputs": {
+                                  "name": "Resource",
+                                  "value": "@items('Loop_through_resource_territory_details_')?['_msdyn_resource_value']"
+                                },
+                                "runAfter": {},
+                                "type": "SetVariable"
+                              }
+                            },
+                            "foreach": "@body('Get_resource_territory_details_')?['value']",
+                            "runAfter": {},
+                            "type": "Foreach"
+                          },
+                          "Loop_through_time_zone_definition_details_": {
+                            "actions": {
+                              "Set_time_zone_name_variable": {
+                                "inputs": {
+                                  "name": "Time Zone Name",
+                                  "value": "@items('Loop_through_time_zone_definition_details_')?['standardname']"
+                                },
+                                "runAfter": {},
+                                "type": "SetVariable"
+                              }
+                            },
+                            "foreach": "@body('Get_time_zone_definitions_details_')?['value']",
+                            "runAfter": {
+                              "Get_time_zone_definitions_details_": [
+                                "Succeeded"
+                              ]
+                            },
+                            "type": "Foreach"
+                          },
+                          "Set_start_date_variable": {
+                            "inputs": {
+                              "name": "Start Date",
+                              "value": "@{addHours(body('Convert_time_zone'),rand(7,20))}"
+                            },
+                            "runAfter": {
+                              "Convert_time_zone": [
+                                "Succeeded"
+                              ]
+                            },
+                            "type": "SetVariable"
+                          },
+                          "Set_time_zone_code_variable": {
+                            "inputs": {
+                              "name": "Time Zone Code",
+                              "value": "@{body('Get_bookable_resource_details')?['timezone']}"
+                            },
+                            "runAfter": {
+                              "Get_bookable_resource_details": [
+                                "Succeeded"
+                              ]
+                            },
+                            "type": "SetVariable"
+                          }
+                        },
+                        "expression": {
+                          "and": [
+                            {
+                              "greater": [
+                                "@variables('Count of Resource in Territory')",
+                                0
+                              ]
+                            }
+                          ]
+                        },
+                        "runAfter": {
+                          "Set_count_of_resource_in_territory_variable_": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "If"
+                      },
+                      "Get_booking_status_details_by_name": {
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['commondataservice']['connectionId']"
+                            }
+                          },
+                          "method": "get",
+                          "path": "[concat('/v2/datasets/',parameters('dynamicsEndpoint'),variables('getBookingStatusListURL'))]",
+                          "queries": {
+                            "$filter": "name eq 'Scheduled'",
+                            "$top": 1
+                          }
+                        },
+                        "runAfter": {},
+                        "type": "ApiConnection"
+                      },
+                      "Get_resource_territory_details_": {
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['commondataservice']['connectionId']"
+                            }
+                          },
+                          "method": "get",
+                          "path": "[concat('/v2/datasets/',parameters('dynamicsEndpoint'),variables('getResourceTerritoriesListURL'))]",
+                          "queries": {
+                            "$filter": "_msdyn_territory_value eq @{body('Account_details_associated_to_customer_asset')?['_msdyn_serviceterritory_value']}",
+                            "$top": 1
+                          }
+                        },
+                        "runAfter": {
+                          "Loop_through_booking_status_details": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "ApiConnection"
+                      },
+                      "Loop_through_booking_status_details": {
+                        "actions": {
+                          "Set_booking_status_variable": {
+                            "inputs": {
+                              "name": "Booking Status",
+                              "value": "@items('Loop_through_booking_status_details')?['bookingstatusid']"
+                            },
+                            "runAfter": {},
+                            "type": "SetVariable"
+                          }
+                        },
+                        "foreach": "@body('Get_booking_status_details_by_name')?['value']",
+                        "runAfter": {
+                          "Get_booking_status_details_by_name": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "Foreach"
+                      },
+                      "Set_count_of_resource_in_territory_variable_": {
+                        "inputs": {
+                          "name": "Count of Resource in Territory",
+                          "value": "@length(body('Get_resource_territory_details_')?['value'])"
+                        },
+                        "runAfter": {
+                          "Get_resource_territory_details_": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "SetVariable"
+                      }
+                    },
+                    "runAfter": {
+                      "Update_IoT_alert_record_with_case_and_work_order_": [
+                        "Succeeded"
+                      ]
+                    },
+                    "type": "Scope"
+                  },
+                  "Create_Associated_Case": {
+                    "actions": {
+                      "Case_creation_for_IoT_alert": {
+                        "inputs": {
+                          "body": {
+                            "_customerid_type": "accounts",
+                            "_customerid_value": "@body('Account_details_associated_to_customer_asset')?['accountid']",
+                            "_msdyn_iotalert_value": "@triggerBody()?['msdyn_iotalertid']",
+                            "_ownerid_type": "",
+                            "caseorigincode": 700610000,
+                            "merged": false,
+                            "title": "@triggerBody()?['msdyn_description']"
+                          },
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['commondataservice']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "path": "[concat('/v2/datasets/',parameters('dynamicsEndpoint'),variables('getIncidentsListURL'))]"
+                        },
+                        "runAfter": {},
+                        "type": "ApiConnection"
+                      }
+                    },
+                    "runAfter": {
+                      "Fetch_Asset_and_Account_Details": [
+                        "Succeeded"
+                      ]
+                    },
+                    "type": "Scope"
+                  },
+                  "Create_Associated_WorkOrder": {
+                    "actions": {
+                      "Get_incident_type_by_name": {
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['commondataservice']['connectionId']"
+                            }
+                          },
+                          "method": "get",
+                          "path": "[concat('/v2/datasets/',parameters('dynamicsEndpoint'),variables('getIncidentTypesListURL'))]",
+                          "queries": {
+                            "$filter": "msdyn_name eq '@{variables('Incident Type')}'",
+                            "$top": 1
+                          }
+                        },
+                        "runAfter": {
+                          "Loop_through_work_order_type_details_": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "ApiConnection"
+                      },
+                      "Get_price_list_details": {
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['commondataservice']['connectionId']"
+                            }
+                          },
+                          "method": "get",
+                          "path": "[concat('/v2/datasets/',parameters('dynamicsEndpoint'),variables('getPriceLevelListURL'))]",
+                          "queries": {
+                            "$filter": "name eq '@{variables('Price List')}'",
+                            "$top": 1
+                          }
+                        },
+                        "runAfter": {
+                          "Loop_through_priority_details_": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "ApiConnection"
+                      },
+                      "Get_priority_details": {
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['commondataservice']['connectionId']"
+                            }
+                          },
+                          "method": "get",
+                          "path": "[concat('/v2/datasets/',parameters('dynamicsEndpoint'),variables('getPrioritiesListURL'))]",
+                          "queries": {
+                            "$filter": "msdyn_levelofimportance eq @{variables('Priority')}",
+                            "$top": 1
+                          }
+                        },
+                        "runAfter": {},
+                        "type": "ApiConnection"
+                      },
+                      "Get_work_order_type_by_name": {
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['commondataservice']['connectionId']"
+                            }
+                          },
+                          "method": "get",
+                          "path": "[concat('/v2/datasets/',parameters('dynamicsEndpoint'),variables('getWorkOrderTypesListURL'))]",
+                          "queries": {
+                            "$filter": "msdyn_name eq '@{variables('Work Order Type')}'",
+                            "$top": 1
+                          }
+                        },
+                        "runAfter": {
+                          "Loop_through_price_list_details_": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "ApiConnection"
+                      },
+                      "Loop_through_incident_type_details": {
+                        "actions": {
+                          "Set_Incident_Type_Variable": {
+                            "inputs": {
+                              "name": "Incident Type",
+                              "value": "@items('Loop_through_incident_type_details')?['msdyn_incidenttypeid']"
+                            },
+                            "runAfter": {},
+                            "type": "SetVariable"
+                          }
+                        },
+                        "foreach": "@body('Get_incident_type_by_name')?['value']",
+                        "runAfter": {
+                          "Get_incident_type_by_name": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "Foreach"
+                      },
+                      "Loop_through_price_list_details_": {
+                        "actions": {
+                          "Set_price_list_variable": {
+                            "inputs": {
+                              "name": "Price List",
+                              "value": "@items('Loop_through_price_list_details_')?['pricelevelid']"
+                            },
+                            "runAfter": {},
+                            "type": "SetVariable"
+                          }
+                        },
+                        "foreach": "@body('Get_price_list_details')?['value']",
+                        "runAfter": {
+                          "Get_price_list_details": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "Foreach"
+                      },
+                      "Loop_through_priority_details_": {
+                        "actions": {
+                          "Set_PriorityEntity__variable": {
+                            "inputs": {
+                              "name": "PriorityEntity",
+                              "value": "@items('Loop_through_priority_details_')?['msdyn_priorityid']"
+                            },
+                            "runAfter": {},
+                            "type": "SetVariable"
+                          }
+                        },
+                        "foreach": "@body('Get_priority_details')?['value']",
+                        "runAfter": {
+                          "Get_priority_details": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "Foreach"
+                      },
+                      "Loop_through_work_order_type_details_": {
+                        "actions": {
+                          "Set_Work_Order_Type_variable": {
+                            "inputs": {
+                              "name": "Work Order Type",
+                              "value": "@items('Loop_through_work_order_type_details_')?['msdyn_workordertypeid']"
+                            },
+                            "runAfter": {},
+                            "type": "SetVariable"
+                          }
+                        },
+                        "foreach": "@body('Get_work_order_type_by_name')?['value']",
+                        "runAfter": {
+                          "Get_work_order_type_by_name": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "Foreach"
+                      },
+                      "Work_order_Creation_for_IoT_alert": {
+                        "inputs": {
+                          "body": {
+                            "_msdyn_customerasset_value": "@body('Customer_asset_details_associated_to_IoT_alert')?['msdyn_customerassetid']",
+                            "_msdyn_iotalert_value": "@triggerBody()?['msdyn_iotalertid']",
+                            "_msdyn_pricelist_value": "@variables('Price List')",
+                            "_msdyn_primaryincidenttype_value": "@variables('Incident Type')",
+                            "_msdyn_priority_value": "@variables('PriorityEntity')",
+                            "_msdyn_serviceaccount_value": "@body('Customer_asset_details_associated_to_IoT_alert')?['_msdyn_account_value']",
+                            "_msdyn_servicerequest_value": "@body('Case_creation_for_IoT_alert')?['incidentid']",
+                            "_msdyn_workordertype_value": "@variables('Work Order Type')",
+                            "_ownerid_type": "",
+                            "hmt_document": "https://vfddemodyconstorage.blob.core.windows.net/shared/eZVFD_Catalog_Sheet_c.pdf",
+                            "hmt_image": "https://vfddemodyconstorage.blob.core.windows.net/shared/VFD-explode-s.jpg",
+                            "hmt_video": "https://vfddemodyconstorage.blob.core.windows.net/shared/VFD-CP2000-720.mp4",
+                            "msdyn_followuprequired": false,
+                            "msdyn_instructions": "1) Open Iconics VFD management portal 2) Slow down Fan speed!",
+                            "msdyn_isfollowup": false,
+                            "msdyn_ismobile": false,
+                            "msdyn_name": "@{null}",
+                            "msdyn_primaryincidentestimatedduration": 15,
+                            "msdyn_systemstatus": 690970000,
+                            "msdyn_taxable": false,
+                            "msdyn_workordersummary": "@triggerBody()?['msdyn_description']"
+                          },
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['commondataservice']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "path": "[concat('/v2/datasets/',parameters('dynamicsEndpoint'),variables('getWorkOrderListURL'))]"
+                        },
+                        "runAfter": {
+                          "Loop_through_incident_type_details": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "ApiConnection"
+                      }
+                    },
+                    "runAfter": {
+                      "Create_Associated_Case": [
+                        "Succeeded"
+                      ]
+                    },
+                    "type": "Scope"
+                  },
+                  "Fetch_Asset_and_Account_Details": {
+                    "actions": {
+                      "Account_details_associated_to_customer_asset": {
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['commondataservice']['connectionId']"
+                            }
+                          },
+                          "method": "get",
+                          "path": "[concat('/v2/datasets/',parameters('dynamicsEndpoint'),variables('getAccountValueURL'))]"
+                        },
+                        "runAfter": {
+                          "Customer_asset_details_associated_to_IoT_alert": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "ApiConnection"
+                      },
+                      "Customer_asset_details_associated_to_IoT_alert": {
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['commondataservice']['connectionId']"
+                            }
+                          },
+                          "method": "get",
+                          "path": "[concat('/v2/datasets/',parameters('dynamicsEndpoint'),variables('getCustomerAssestValueURL'))]"
+                        },
+                        "runAfter": {},
+                        "type": "ApiConnection"
+                      }
+                    },
+                    "runAfter": {},
+  
+                    "type": "Scope"
+  
+  
+                  },
+                  "Update_IoT_alert_record_with_case_and_work_order_": {
+                    "inputs": {
+                      "body": {
+                        "_msdyn_case_value": "@body('Case_creation_for_IoT_alert')?['incidentid']",
+                        "_msdyn_workorder_value": "@body('Work_order_Creation_for_IoT_alert')?['msdyn_workorderid']",
+                        "_ownerid_type": ""
+                      },
+                      "host": {
+                        "connection": {
+                          "name": "@parameters('$connections')['commondataservice']['connectionId']"
+                        }
+                      },
+                      "method": "patch",
+                      "path": "[concat('/v2/datasets/',parameters('dynamicsEndpoint'),variables('getIoTAlertValueURL'))]"
+                    },
+                    "runAfter": {
+                      "Create_Associated_WorkOrder": [
+                        "Succeeded"
+                      ]
+                    },
+                    "type": "ApiConnection"
+                  }
+                },
+                "expression": {
+                  "and": [
+                    {
+                      "not": {
+                        "equals": [
+                          "@body('Parse_Alert_Data_JSON')?['AssetName']",
+                          "@null"
+                        ]
+                      }
+                    },
+                    {
+                      "not": {
+                        "equals": [
+                          "@body('Parse_Alert_Data_JSON')?['AssetPath']",
+                          "@null"
+                        ]
+                      }
+                    },
+                    {
+                      "not": {
+                        "equals": [
+                          "@body('Parse_Alert_Data_JSON')?['FaultActiveTime']",
+                          "@null"
+                        ]
+                      }
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "Initialize_count_of_resource_in_territory_variable_": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "If"
+              },
+              "Initialize_booking_status_variable": {
+                "inputs": {
+                  "variables": [
+                    {
+                      "name": "Booking Status",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "Initialize_priority_entity_variable": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "InitializeVariable"
+              },
+              "Initialize_count_of_resource_in_territory_variable_": {
+                "inputs": {
+                  "variables": [
+                    {
+                      "name": "Count of Resource in Territory",
+                      "type": "integer",
+                      "value": 0
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "Set_priority_variable": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "InitializeVariable"
+              },
+              "Initialize_incident_type_variable": {
+                "inputs": {
+                  "variables": [
+                    {
+                      "name": "Incident Type",
+                      "type": "string",
+                      "value": "VFD fan motor"
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "Initialize_work_order_type_variable": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "InitializeVariable"
+              },
+              "Initialize_price_list_variable": {
+                "inputs": {
+                  "variables": [
+                    {
+                      "name": "Price List",
+                      "type": "string",
+                      "value": "Default PriceList"
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "Initialize_start_date_variable": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "InitializeVariable"
+              },
+              "Initialize_priority_entity_variable": {
+                "inputs": {
+                  "variables": [
+                    {
+                      "name": "PriorityEntity",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "Initialize_time_zone_code_variable": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "InitializeVariable"
+              },
+              "Initialize_priority_variable_": {
+                "inputs": {
+                  "variables": [
+                    {
+                      "name": "Priority",
+                      "type": "integer",
+                      "value": 0
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "Initialize_incident_type_variable": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "InitializeVariable"
+              },
+              "Initialize_resource_variable": {
+                "inputs": {
+                  "variables": [
+                    {
+                      "name": "Resource",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "Initialize_booking_status_variable": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "InitializeVariable"
+              },
+              "Initialize_start_date_variable": {
+                "inputs": {
+                  "variables": [
+                    {
+                      "name": "Start Date",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "Initialize_resource_variable": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "InitializeVariable"
+              },
+              "Initialize_time_zone_code_variable": {
+                "inputs": {
+                  "variables": [
+                    {
+                      "name": "Time Zone Code",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "Initialize_priority_variable_": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "InitializeVariable"
+              },
+              "Initialize_time_zone_name_variable": {
+                "inputs": {
+                  "variables": [
+                    {
+                      "name": "Time Zone Name",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "Parse_Alert_Data_JSON": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "InitializeVariable"
+              },
+              "Initialize_work_order_type_variable": {
+                "inputs": {
+                  "variables": [
+                    {
+                      "name": "Work Order Type",
+                      "type": "string",
+                      "value": "Comfort"
+                    }
+                  ]
+                },
+                "runAfter": {
+                  "Initialize_time_zone_name_variable": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "InitializeVariable"
+              },
+              "Parse_Alert_Data_JSON": {
+                "inputs": {
+                  "content": "@triggerBody()?['msdyn_alertdata']",
+                  "schema": {
+                    "properties": {
+                      "AssetName": {
+                        "type": "string"
+                      },
+                      "AssetPath": {
+                        "type": "string"
+                      },
+                      "Description": {
+                        "type": "string"
+                      },
+                      "EventProcessedUtcTime": {
+                        "type": "string"
+                      },
+                      "FaultActivationVariables": {
+                        "type": "string"
+                      },
+                      "FaultActiveTime": {
+                        "type": "string"
+                      },
+                      "FaultCostValue": {
+                        "type": "string"
+                      },
+                      "FaultDeactivationTime": {
+                        "type": "string"
+                      },
+                      "FaultDeactivationVariables": {
+                        "type": "string"
+                      },
+                      "FaultName": {
+                        "type": "string"
+                      },
+                      "FaultState": {
+                        "type": "string"
+                      },
+                      "MessageSource": {
+                        "type": "string"
+                      },
+                      "Priority": {
+                        "type": "string"
+                      },
+                      "RelatedValue1": {
+                        "type": "string"
+                      },
+                      "RelatedValue10": {
+                        "type": "string"
+                      },
+                      "RelatedValue11": {
+                        "type": "string"
+                      },
+                      "RelatedValue12": {
+                        "type": "string"
+                      },
+                      "RelatedValue13": {
+                        "type": "string"
+                      },
+                      "RelatedValue14": {
+                        "type": "string"
+                      },
+                      "RelatedValue15": {
+                        "type": "string"
+                      },
+                      "RelatedValue16": {
+                        "type": "string"
+                      },
+                      "RelatedValue17": {
+                        "type": "string"
+                      },
+                      "RelatedValue18": {
+                        "type": "string"
+                      },
+                      "RelatedValue19": {
+                        "type": "string"
+                      },
+                      "RelatedValue2": {
+                        "type": "string"
+                      },
+                      "RelatedValue20": {
+                        "type": "string"
+                      },
+                      "RelatedValue3": {
+                        "type": "string"
+                      },
+                      "RelatedValue4": {
+                        "type": "string"
+                      },
+                      "RelatedValue5": {
+                        "type": "string"
+                      },
+                      "RelatedValue6": {
+                        "type": "string"
+                      },
+                      "RelatedValue7": {
+                        "type": "string"
+                      },
+                      "RelatedValue8": {
+                        "type": "string"
+                      },
+                      "RelatedValue9": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  }
+                },
+                "runAfter": {},
+                "type": "ParseJson"
+              },
+              "Set_priority_variable": {
+                "inputs": {
+                  "name": "Priority",
+                  "value": "@int(body('Parse_Alert_Data_JSON')?['Priority'])"
+                },
+                "runAfter": {
+                  "Initialize_price_list_variable": [
+                    "Succeeded"
+                  ]
+                },
+                "type": "SetVariable"
+              }
+            },
+            "contentVersion": "1.0.0.0",
+            "outputs": {},
+            "parameters": {
+              "$connections": {
+                "defaultValue": {},
+                "type": "Object"
+              }
+            },
+            "triggers": {
+              "Triggers_on_creation_of_IoT_Alert_record": {
+                "inputs": {
+                  "body": {
+                    "NotificationUrl": "@{listCallbackUrl()}"
+                  },
+                  "host": {
+                    "connection": {
+                      "name": "@parameters('$connections')['commondataservice']['connectionId']"
+                    }
+                  },
+                  "path": "[concat('/datasets/',parameters('dynamicsEndpoint'),variables('getIotAlertCreatedtURL'))]",
+                  "queries": {
+                    "scope": "Organization"
+                  }
+                },
+                "type": "ApiConnectionWebhook"
+              }
+            }
+          },
+          "parameters": {
+            "$connections": {
+              "value": {
+                "commondataservice": {
+                  "connectionId": "[resourceId('Microsoft.Web/connections', variables('CDSConnectionName'))]",
+                  "connectionName": "commondataservice",
+                  "id": "[variables('CDSConnectionId')]"
+                }
+              }
+            }
+          }
+        },
+        "resources": [
+          {
+            "type": "Providers/DiagnosticSettings",
+            "name": "[concat('Microsoft.Insights/', variables('diagnosticSettingsName'))]",
+            "dependsOn": [
+              "[resourceId('Microsoft.Logic/workflows', variables('logicAppName'))]"
+            ],
+            "apiVersion": "2017-05-01-preview",
+            "properties": {
+              "name": "[variables('diagnosticSettingsName')]",
+              "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('operationalWorkspaceName'))]",
+              "mode": "Incremental",
+              "logs": [
+                {
+                  "category": "WorkflowRuntime",
+                  "enabled": true
+                }
+              ],
+              "metrics": [
+                {
+                  "timeGrain": "PT1M",
+                  "enabled": true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+}

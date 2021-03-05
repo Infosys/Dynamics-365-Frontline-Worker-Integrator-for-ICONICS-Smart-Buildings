@@ -55,6 +55,34 @@ Dynamics 365 Field Service, can be accessed using a service principal. Below are
 
 3. Setup client secret key by navigating to Settings -&gt; Keys, create a new Key and save to generate a new Secret key value
 
+4. Application created must be allowed to access within multitenant.
+
+    ![dynamics-app-registration](./assets/dynamics-connector-setup/dynamics-app-registration.png)
+
+5. Give API permissions to application. Click on “Add a permission”.
+
+    ![dynamics-add-permission](./assets/dynamics-connector-setup/dynamics-add-permission.png)
+
+6. Choose Dynamics CRM (Common Data Service) API permission.
+
+    ![dynamics-choose-crm](./assets/dynamics-connector-setup/dynamics-choose-crm.png)
+
+7. Once that has been selected, with Delegated permissions highlighted, click the checkbox beside user impersonation and click Add permissions.
+
+    ![dynamics-click-checkbox](./assets/dynamics-connector-setup/dynamics-click-checkbox.png)
+
+8. The next step we are allowing access to the Dynamics CRM (Common Data Service) by selecting the Grant admin consent.
+
+    ![dynamics-select-gac](./assets/dynamics-connector-setup/dynamics-select-gac.png)
+
+9. Click on Grant admin consent. You will be asked to confirm, click Yes.
+
+    ![dynamics-click-yes](./assets/dynamics-connector-setup/dynamics-click-yes.png)
+
+10. Dynamics 365 (CDS) API must have a confirmation for granted admin consent.
+
+    ![dynamics-confirmation](./assets/dynamics-connector-setup/dynamics-confirmation.png)
+
 #### Create a new Dynamics 365 Application user
 
 1. Log into Dynamics 365 Online, navigate to Settings -&gt; Security -&gt; Users and change the view to Application Users. Click on New to open a new Application User Form.
@@ -72,9 +100,11 @@ Dynamics 365 Field Service, can be accessed using a service principal. Below are
     II. Once saving the record the following fields will be auto
         populated by Dynamics 365
 
-3. Add user to the following roles: Field Service – Administrator, IoT - Endpoint User, and IoT - Administrator.
+3. Add user to the following roles: Field Service – Administrator,Basic User, IoT - Endpoint User, and IoT - Administrator.
 
 ![dynamics-role-fs](./assets/dynamics-connector-setup/dynamics-role-fs.png)
+
+![dynamics-role-basic-user](./assets/dynamics-connector-setup/dynamics-role-basic-user.png)
 
 ![dynamics-role-iot](./assets/dynamics-connector-setup/dynamics-role-iot.png)
 
@@ -214,8 +244,10 @@ This character represents the environment where the resource is used, for exampl
 - Azure Service Bus is the output sink for the ASA job.
    It allows an Azure Function to serve as a subscriber.  The pub/sub mechanism allows for future use by other subscribers.
 - A Service Bus triggered Azure Function performs any additional customer-specific business logic and creates an [IoTAlert entity](https://docs.microsoft.com/dynamics365/customer-engagement/web-api/msdyn_iotalert?view=dynamics-ce-odata-9) (and any needed Asset) in Dynamics Field Service.
-- A Logic App will trigger based on the creation of a new Dynamics Field Service work order.
-- The Logic App uses the work order data to place a message in a Service Bus queue
+- A Logic App will be triggerred based on the creation of a new Dyncamis Field Service IoT Alert.
+- The Logic App creates a Case, Work Order and then a Resource Booking for the corresponding IoT Alert.
+- Another Logic App will be triggerred based on the creation of a new Dynamics Field Service work order.
+- This Logic App uses the work order data to place a message in a Service Bus queue
 - A Service Bus queue-triggered Azure Function receives the message and sends a cloud-to-device message.
 - ICONICS subscribes to the MQTT device topic (provided by Azure IoT Hub)
 - Components such as Application Insights, Log Analytics workspace, and Key Vault are shared resources.  They are not core components of the processing pipeline.  However, they are vital to the operation of the pipeline.
@@ -230,4 +262,4 @@ This character represents the environment where the resource is used, for exampl
 
 [Naming convention details](naming-convention.md)
 
-[ICONICS Connector setup](#TODO)
+[ICONICS Connector setup](ICONICS_Fault_Event_Publisher.md)

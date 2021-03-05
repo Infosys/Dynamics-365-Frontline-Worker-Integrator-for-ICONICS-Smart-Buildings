@@ -4,7 +4,7 @@ This project provides a reference solution to create Dynamics Field Service IoT 
 
 The solution provides one approach for ICONICS faults to integrate with Dynamics Field Service.  As ICONICS faults are generated, the fault event flows to the solution and from there to Dynamics Field Service as an IoT Alert.  Once the IoT Alert is created, a Dynamics Field Service user may elect to create a work order from the alert.  The creation of a work order will trigger a response, or acknowledgement, event to be sent back to ICONICS.
 
-Please refer to the [Connector setup](./docs/Connector-setup.md) for more information on how to get started with the solution, including more details on the high-level architecture.
+Please refer to the [Connector setup](./docs/Connector-Setup.md) for more information on how to get started with the solution, including more details on the high-level architecture.
 
 Please refer to the [Dynamics 365 setup](./docs/Dynamics-365-Setup.md) for more information on how to setup the Dynamics Field Service instance for use with the solution.
 

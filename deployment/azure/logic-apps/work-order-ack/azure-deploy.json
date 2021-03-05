@@ -1,10 +1,6 @@
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
-    "metadata": {
-        "comments": "This entry made purely to test CI/CD pipelines triggers. DELETE ME once pipelines validated.",
-        "author": "Shawn Gaul"
-    },
     "parameters": {
         "groupId": {
             "type": "string",
@@ -28,7 +24,6 @@
         },
         "dynamicsEndpoint": {
             "type": "string",
-            "defaultValue": "msftindustryinn.crm",
             "metadata": {
                 "description": "The CRM OrgName to the instance of dyanmics to use for this logic app trigger and action."
             }
@@ -36,26 +31,25 @@
         "clientId": {
             "type": "securestring",
             "metadata": {
-            "description": "Client (or Application) ID of the Azure Active Directory application."
+                "description": "Client (or Application) ID of the Azure Active Directory application."
             }
         },
         "clientSecret": {
             "type": "securestring",
             "metadata": {
-            "description": "Client secret of the Azure Active Directory application."
+                "description": "Client secret of the Azure Active Directory application."
             }
         },
         "tenantId": {
             "type": "securestring",
-            "defaultValue": "[subscription().tenantId]",
             "metadata": {
-            "description": "Tenant ID of the Azure Active Directory application where the Dynamics CRM instance resides."
+                "description": "Tenant ID of the Azure Active Directory application where the Dynamics CRM instance resides."
             }
         },
         "ServiceBusConnectionString": {
             "type": "securestring",
             "metadata": {
-            "description": "Service Bus ConnectionString"
+                "description": "Service Bus ConnectionString"
             }
         }
     },
@@ -462,6 +456,6 @@
                 }
             }
         ]
-}
+    }
     ]
 }
