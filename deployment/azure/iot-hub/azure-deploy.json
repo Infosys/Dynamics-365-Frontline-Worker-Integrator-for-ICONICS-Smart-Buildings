@@ -34,13 +34,18 @@
             "metadata": {
                 "description": "The array of iot hubs to create"
             }
+        },
+        "operationalWorkspaceName":{
+            "type": "string",
+            "metadata": {
+                "description":"The ID of the Workspace."
+            }
         }
     },
     "variables": {
         "location": "[resourceGroup().location]",
         "baseName": "[toLower(concat(parameters('groupId'), parameters('environment'), variables('location')))]",
         "keyVaultName": "[concat(variables('baseName'), 'kvt')]",
-        "operationalWorkspaceName": "[concat(variables('baseName'), 'log')]",
         "iotHubName": "[concat(variables('baseName'), 'iot')]",
         "iotHubSkuName": "[if(equals(parameters('sku'), 'standard'), 'S1', 'S3')]",
         "iotHubCapacityUnits": "[if(equals(parameters('sku'), 'standard'), '1', '2')]",
@@ -99,7 +104,7 @@
                     "apiVersion": "2017-05-01-preview",
                     "properties": {
                         "name": "[concat(variables('iotHubName'), '-', parameters('iothubs')[copyIndex()], 'diag')]",
-                        "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('operationalWorkspaceName'))]",
+                        "workspaceId": "[parameters('operationalWorkspaceName')]",
                         "mode": "Incremental",
                         "logs": [
                             {

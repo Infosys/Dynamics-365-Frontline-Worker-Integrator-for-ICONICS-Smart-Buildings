@@ -94,6 +94,12 @@
             "metadata": {
                 "description":"The time interval to add to the configuration to break the circuit."
             }
+        },
+        "operationalWorkspaceName":{
+            "type": "string",
+            "metadata": {
+                "description":"The ID of the Workspace."
+            }
         }
     },
     "variables": {
@@ -101,7 +107,6 @@
         "baseName": "[toLower(concat(parameters('groupId'), parameters('environment'), variables('location')))]",
         "appInsightsName": "[concat(variables('baseName'), 'ai')]",
         "keyVaultName": "[concat(variables('baseName'), 'kvt')]",
-        "operationalWorkspaceName": "[concat(variables('baseName'), 'log')]",
         "serviceBusName": "[concat(variables('baseName'), 'sb')]",
         "appServicePlanName": "[concat(variables('baseName'), 'asp')]",
         "functionAppName": "[concat(variables('baseName'), 'fa')]",
@@ -123,19 +128,6 @@
             }
         },
         {
-            "type": "Microsoft.OperationalInsights/workspaces",
-            "apiVersion": "2020-03-01-preview",
-            "name": "[variables('operationalWorkspaceName')]",
-            "location": "[variables('location')]",
-            "properties": {
-                "source": "Azure",
-                "sku": {
-                    "name": "[parameters('sku')]"
-                },
-                "retentionInDays": 30
-            }
-        },
-        {
             "name": "[variables('serviceBusName')]",
             "type": "Microsoft.ServiceBus/namespaces",
             "apiVersion": "2017-04-01",
@@ -151,13 +143,12 @@
                     "type": "Providers/DiagnosticSettings",
                     "name": "[concat('Microsoft.Insights/', variables('serviceBusName'), '.Diagnostics')]",
                     "dependsOn": [
-                        "[resourceId('Microsoft.OperationalInsights/workspaces', variables('operationalWorkspaceName'))]",
                         "[resourceId('Microsoft.ServiceBus/namespaces', variables('serviceBusName'))]"
                     ],
                     "apiVersion": "2017-05-01-preview",
                     "properties": {
                         "name": "[concat(variables('serviceBusName'), '.Diagnostics')]",
-                        "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('operationalWorkspaceName'))]",
+                        "workspaceId": "[parameters('operationalWorkspaceName')]",
                         "mode": "Incremental",
                         "logs": [
                             {
@@ -324,13 +315,12 @@
                     "type": "Providers/DiagnosticSettings",
                     "name": "[concat('Microsoft.Insights/', variables('keyVaultName'), '.Diagnostics')]",
                     "dependsOn": [
-                        "[resourceId('Microsoft.OperationalInsights/workspaces', variables('operationalWorkspaceName'))]",
                         "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
                     ],
                     "apiVersion": "2017-05-01-preview",
                     "properties": {
                         "name": "[concat(variables('keyVaultName'), '.Diagnostics')]",
-                        "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('operationalWorkspaceName'))]",
+                        "workspaceId": "[parameters('operationalWorkspaceName')]",
                         "mode": "Incremental",
                         "logs": [
                             {
@@ -490,13 +480,12 @@
                     "type": "Providers/DiagnosticSettings",
                     "name": "[concat('Microsoft.Insights/', variables('functionAppName'), '.Diagnostics')]",
                     "dependsOn": [
-                        "[resourceId('Microsoft.OperationalInsights/workspaces', variables('operationalWorkspaceName'))]",
                         "[resourceId('Microsoft.Web/sites', variables('functionAppName'))]"
                     ],
                     "apiVersion": "2017-05-01-preview",
                     "properties": {
                         "name": "[concat(variables('functionAppName'), '.Diagnostics')]",
-                        "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('operationalWorkspaceName'))]",
+                        "workspaceId": "[parameters('operationalWorkspaceName')]",
                         "mode": "Incremental",
                         "logs": [
                             {
@@ -586,13 +575,12 @@
                     "type": "Providers/DiagnosticSettings",
                     "name": "[concat('Microsoft.Insights/', variables('circuitBreakerFunctionAppName'), '.Diagnostics')]",
                     "dependsOn": [
-                        "[resourceId('Microsoft.OperationalInsights/workspaces', variables('operationalWorkspaceName'))]",
                         "[resourceId('Microsoft.Web/sites', variables('circuitBreakerFunctionAppName'))]"
                     ],
                     "apiVersion": "2017-05-01-preview",
                     "properties": {
                         "name": "[concat(variables('circuitBreakerFunctionAppName'), '.Diagnostics')]",
-                        "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('operationalWorkspaceName'))]",
+                        "workspaceId": "[parameters('operationalWorkspaceName')]",
                         "mode": "Incremental",
                         "logs": [
                             {
@@ -647,14 +635,6 @@
         "keyVaultId": {
             "type": "string",
             "value": "[resourceId('/Microsoft.KeyVault/vaults/', variables('keyVaultName'), '2019-09-01')]"
-        },
-        "operationalWorkspaceName": {
-            "type": "string",
-            "value": "[variables('operationalWorkspaceName')]"
-        },
-        "operationalWorkspaceId": {
-            "type": "string",
-            "value": "[resourceId('/Microsoft.OperationalInsights/workspaces/', variables('operationalWorkspaceName'), '2020-03-01-preview')]"
         },
         "serviceBusName": {
             "type": "string",

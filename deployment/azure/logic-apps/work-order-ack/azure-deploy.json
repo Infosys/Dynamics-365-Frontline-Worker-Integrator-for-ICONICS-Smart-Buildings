@@ -51,6 +51,12 @@
             "metadata": {
                 "description": "Service Bus ConnectionString"
             }
+        },
+        "operationalWorkspaceName":{
+            "type": "string",
+            "metadata": {
+                "description":"The ID of the Log Workspace"
+            }
         }
     },
     "variables": {
@@ -65,8 +71,7 @@
         "getWorkOrderURL": "/tables/@{encodeURIComponent(encodeURIComponent('msdyn_workorders'))}/onnewitemswebhook",
         "getAppModuleURL": "/tables/@{encodeURIComponent(encodeURIComponent('appmodules'))}/items",
         "getIoTAlertURL": "/tables/@{encodeURIComponent(encodeURIComponent('msdyn_iotalerts'))}/items/@{encodeURIComponent(encodeURIComponent(triggerBody()?['_msdyn_iotalert_value']))}",
-        "diagnosticSettingsName": "[concat(variables('logicAppName'), '.Diagnostics')]",
-        "operationalWorkspaceName": "[concat(variables('baseName'), 'log')]"
+        "diagnosticSettingsName": "[concat(variables('logicAppName'), '.Diagnostics')]"
     },
     "resources": [
         {
@@ -439,7 +444,7 @@
                 "apiVersion": "2017-05-01-preview",
                 "properties": {
                     "name": "[variables('diagnosticSettingsName')]",
-                    "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('operationalWorkspaceName'))]",
+                    "workspaceId": "[parameters('operationalWorkspaceName')]",
                     "mode": "Incremental",
                     "logs": [
                         {

@@ -67,6 +67,12 @@
             "metadata": {
                 "description": "The Service Bus shared access policy key"
             }
+        },
+        "operationalWorkspaceName":{
+            "type": "string",
+            "metadata": {
+                "description":"The ID of the Workspace"
+            }
         }
     },
     "variables": {
@@ -74,8 +80,7 @@
         "baseName": "[toLower(concat(parameters('groupId'), parameters('environment'), variables('location')))]",
         "streamAnalyticsJobName": "[concat(variables('baseName'), 'sa')]",
         "serviceBusName": "[concat(variables('baseName'), 'sb')]",
-        "streamAnalyticsTransform": "sa-transform",
-        "operationalWorkspaceName": "[concat(variables('baseName'), 'log')]"
+        "streamAnalyticsTransform": "sa-transform"
     },
     "resources": [
         {
@@ -158,7 +163,7 @@
                     "apiVersion": "2017-05-01-preview",
                     "properties": {
                         "name": "[concat(variables('streamAnalyticsJobName'), '.Diagnostics')]",
-                        "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('operationalWorkspaceName'))]",
+                        "workspaceId": "[parameters('operationalWorkspaceName')]",
                         "mode": "Incremental",
                         "logs": [
                             {

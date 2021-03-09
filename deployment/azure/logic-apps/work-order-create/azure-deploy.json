@@ -38,6 +38,12 @@
         "metadata": {
           "description": "Tenant ID of the Azure Active Directory application where the Dynamics CRM instance resides."
         }
+      },
+      "operationalWorkspaceName":{
+          "type": "string",
+          "metadata": {
+              "description":"The ID of the Workspace."
+          }
       }
     },
     "variables": {
@@ -51,7 +57,6 @@
       "getWorkOrderURL": "/tables/@{encodeURIComponent(encodeURIComponent('msdyn_workorders'))}/onnewitemswebhook",
       "getAppModuleURL": "/tables/@{encodeURIComponent(encodeURIComponent('appmodules'))}/items",
       "diagnosticSettingsName": "[concat(variables('logicAppName'), '.Diagnostics')]",
-      "operationalWorkspaceName": "[concat(variables('baseName'), 'log')]",
       "getCustomerAssestValueURL": "/tables/@{encodeURIComponent(encodeURIComponent('msdyn_customerassets'))}/items/@{encodeURIComponent(encodeURIComponent(triggerBody()?['_msdyn_customerasset_value']))}",
       "getAccountValueURL": "/tables/@{encodeURIComponent(encodeURIComponent('accounts'))}/items/@{encodeURIComponent(encodeURIComponent(body('Customer_asset_details_associated_to_IoT_alert')?['_msdyn_account_value']))}",
       "getBookableResourceBookingListURL": "/tables/@{encodeURIComponent(encodeURIComponent('bookableresourcebookings'))}/items",
@@ -1034,7 +1039,7 @@
             "apiVersion": "2017-05-01-preview",
             "properties": {
               "name": "[variables('diagnosticSettingsName')]",
-              "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('operationalWorkspaceName'))]",
+              "workspaceId": "[parameters('operationalWorkspaceName')]",
               "mode": "Incremental",
               "logs": [
                 {

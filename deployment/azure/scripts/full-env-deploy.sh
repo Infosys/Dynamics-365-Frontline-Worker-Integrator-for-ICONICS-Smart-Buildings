@@ -22,6 +22,8 @@ DEPLOYMENT_NUMBER=$RANDOM
 SUBSCRIPTION_ID=$(az account show -o json --query "id" | tr -d \")
 SUBSCRIPTION_NAME=$(az account show -o json --query "name" | tr -d \")
 VAULT_ID="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP_NAME}/providers/Microsoft.KeyVault/vaults/${BASE_NAME}kvt"
+LOG_WORKSPACE_ID="/subscriptions/${LOG_WS_SUBSCRIPTION_ID}/resourceGroups/${LOG_WS_RESOURCE_GROUP}/providers/Microsoft.OperationalInsights/workspaces/${LOG_WS_NAME}"
+
 STARTING_PWD=$(pwd)
 
 echo "Provisioning resources to the ${RESOURCE_GROUP_NAME} resource group within the ${SUBSCRIPTION_NAME} (${SUBSCRIPTION_ID}) subscription. Resources will have the base name: ${BASE_NAME}."
@@ -53,7 +55,7 @@ az deployment group create \
     -g $RESOURCE_GROUP_NAME \
     -n "CLI-Foundational-Resources-${DEPLOYMENT_NUMBER}" \
     -f ../azure-deploy.json \
-    -p groupId=$GROUPID environment=$ENVIRONMENT sku=$SKU
+    -p groupId=$GROUPID environment=$ENVIRONMENT sku=$SKU operationalWorkspaceName=$LOG_WORKSPACE_ID
 
 if [ "$INCLUDE_IOT_HUB" == "true" ]; then
     echo "Deploying IoT Hub"
@@ -61,7 +63,7 @@ if [ "$INCLUDE_IOT_HUB" == "true" ]; then
         -g $RESOURCE_GROUP_NAME \
         -n "CLI-IotHub-${DEPLOYMENT_NUMBER}" \
         -f ../iot-hub/azure-deploy.json \
-        -p groupId=$GROUPID environment=$ENVIRONMENT sku=$SKU
+        -p groupId=$GROUPID environment=$ENVIRONMENT sku=$SKU operationalWorkspaceName=$LOG_WORKSPACE_ID
 
     echo "Creating Device $IOT_HUB_FAULT_DEVICE_ID on IoT Hub $IOT_HUB_NAME"
     IOT_HUB_FAULT_DEVICE_KEY=$(./create-iot-device.sh $IOT_HUB_NAME $IOT_HUB_FAULT_DEVICE_ID)
@@ -107,7 +109,7 @@ az stream-analytics job stop --resource-group ${RESOURCE_GROUP_NAME} --name ${BA
 set -e
 
 echo "Deploying Stream Analytics"
-PARAMETERS="{ \"groupId\": { \"value\": \"${GROUPID}\" }, \"environment\": { \"value\": \"${ENVIRONMENT}\" }, \"iotHubName\": { \"value\": \"${IOT_HUB_NAME}\" }, \"iotHubSharedAccessPolicyKey\": { \"reference\": { \"keyVault\": { \"id\": \"${VAULT_ID}\" }, \"secretName\": \"IoTServiceKey-faults\" } }, \"iotHubFaultDeviceId\": { \"value\": \"${IOT_HUB_FAULT_DEVICE_ID}\" }, \"serviceBusSharedAccessPolicyKey\": { \"reference\": { \"keyVault\": { \"id\": \"${VAULT_ID}\" }, \"secretName\": \"ServiceBusKeySend\" } } }"
+PARAMETERS="{ \"groupId\": { \"value\": \"${GROUPID}\" }, \"environment\": { \"value\": \"${ENVIRONMENT}\" }, \"operationalWorkspaceName\": { \"value\": \"${LOG_WORKSPACE_ID}\" }, \"iotHubName\": { \"value\": \"${IOT_HUB_NAME}\" }, \"iotHubSharedAccessPolicyKey\": { \"reference\": { \"keyVault\": { \"id\": \"${VAULT_ID}\" }, \"secretName\": \"IoTServiceKey-faults\" } }, \"iotHubFaultDeviceId\": { \"value\": \"${IOT_HUB_FAULT_DEVICE_ID}\" }, \"serviceBusSharedAccessPolicyKey\": { \"reference\": { \"keyVault\": { \"id\": \"${VAULT_ID}\" }, \"secretName\": \"ServiceBusKeySend\" } } }"
 echo "Parameters: ${PARAMETERS}"
 az deployment group create \
     -g $RESOURCE_GROUP_NAME \
@@ -116,7 +118,7 @@ az deployment group create \
     -p "${PARAMETERS}"
 
 echo "Deploying Work Order Ack Logic App"
-PARAMETERS="{ \"groupId\": { \"value\": \"${GROUPID}\" }, \"environment\": { \"value\": \"${ENVIRONMENT}\" }, \"dynamicsEndpoint\": { \"value\": \"${DYNAMICS_ENDPOINT}\" }, \"clientId\": { \"reference\": { \"keyVault\": { \"id\": \"${VAULT_ID}\" }, \"secretName\": \"DynamicsClientId\" } }, \"clientSecret\": { \"reference\": { \"keyVault\": { \"id\": \"${VAULT_ID}\" }, \"secretName\": \"DynamicsClientSecret\" } }, \"tenantId\": { \"value\": \"${DYNAMICS_TENANT_ID}\" }, \"ServiceBusConnectionString\": { \"reference\": { \"keyVault\": { \"id\": \"${VAULT_ID}\" }, \"secretName\": \"ServiceBusConnectionSend\" } } }"
+PARAMETERS="{ \"groupId\": { \"value\": \"${GROUPID}\" }, \"environment\": { \"value\": \"${ENVIRONMENT}\" }, \"operationalWorkspaceName\": { \"value\": \"${LOG_WORKSPACE_ID}\" }, \"dynamicsEndpoint\": { \"value\": \"${DYNAMICS_ENDPOINT}\" }, \"clientId\": { \"reference\": { \"keyVault\": { \"id\": \"${VAULT_ID}\" }, \"secretName\": \"DynamicsClientId\" } }, \"clientSecret\": { \"reference\": { \"keyVault\": { \"id\": \"${VAULT_ID}\" }, \"secretName\": \"DynamicsClientSecret\" } }, \"tenantId\": { \"value\": \"${DYNAMICS_TENANT_ID}\" }, \"ServiceBusConnectionString\": { \"reference\": { \"keyVault\": { \"id\": \"${VAULT_ID}\" }, \"secretName\": \"ServiceBusConnectionSend\" } } }"
 echo "Parameters: ${PARAMETERS}"
 az deployment group create \
     -g $RESOURCE_GROUP_NAME \
@@ -126,7 +128,7 @@ az deployment group create \
 
 if [ "$AUTO_WO_CREATE" == "true" ]; then
     echo "Deploying Work Order Create Logic App"
-    PARAMETERS="{ \"groupId\": { \"value\": \"${GROUPID}\" }, \"environment\": { \"value\": \"${ENVIRONMENT}\" }, \"dynamicsEndpoint\": { \"value\": \"${DYNAMICS_ENDPOINT}\" }, \"clientId\": { \"reference\": { \"keyVault\": { \"id\": \"${VAULT_ID}\" }, \"secretName\": \"DynamicsClientId\" } }, \"clientSecret\": { \"reference\": { \"keyVault\": { \"id\": \"${VAULT_ID}\" }, \"secretName\": \"DynamicsClientSecret\" } }, \"tenantId\": { \"value\": \"${DYNAMICS_TENANT_ID}\" } }"
+    PARAMETERS="{ \"groupId\": { \"value\": \"${GROUPID}\" }, \"environment\": { \"value\": \"${ENVIRONMENT}\" }, \"operationalWorkspaceName\": { \"value\": \"${LOG_WORKSPACE_ID}\" }, \"dynamicsEndpoint\": { \"value\": \"${DYNAMICS_ENDPOINT}\" }, \"clientId\": { \"reference\": { \"keyVault\": { \"id\": \"${VAULT_ID}\" }, \"secretName\": \"DynamicsClientId\" } }, \"clientSecret\": { \"reference\": { \"keyVault\": { \"id\": \"${VAULT_ID}\" }, \"secretName\": \"DynamicsClientSecret\" } }, \"tenantId\": { \"value\": \"${DYNAMICS_TENANT_ID}\" } }"
     echo "Parameters: ${PARAMETERS}"
     az deployment group create \
         -g $RESOURCE_GROUP_NAME \

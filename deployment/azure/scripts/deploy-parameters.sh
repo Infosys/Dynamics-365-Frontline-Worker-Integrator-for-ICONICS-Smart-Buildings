@@ -25,3 +25,8 @@ IOT_HUB_WORKORDER_DEVICE_ID="BXConnector-Dynamics" # Required if INCLUDE_IOT_HUB
 
 # Include additional Logic App to create Work Order and Booking for the IoT Alert
 AUTO_WO_CREATE="true" # Should be either "true" or "false"
+
+# Log Workspace Name
+LOG_WS_SUBSCRIPTION_ID="XXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXX"
+LOG_WS_RESOURCE_GROUP="XXXXXXXXX"
+LOG_WS_NAME="XXXXXXX"
