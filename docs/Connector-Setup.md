@@ -122,7 +122,7 @@ az account set --subscription XXXXXXXXX
 Below are the steps required to setup the base infrastructure
 
 - Navigate to `deployment\azure\scripts` folder.
-- edit full-env-deploy.sh and fill values of
+- edit deploy-parameters.sh and fill values of
   - GROUPID="<>"
   - ENVIRONMENT="d" `You can use d for Development, t for Test, i for Integration and p for Production. Please refer Naming Convention section in Annexure for more details about naming conventions`
   - LOCATION="westus2" `For regions with long names, such as North Central US, you can use the designated abbreviation, for example, "West US" is westus and "Central US" is centralus`
